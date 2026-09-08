@@ -2,7 +2,7 @@
 
 import { AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { guardarFase } from "@/app/(flujo)/inspeccion/[id]/acciones";
@@ -49,12 +49,54 @@ export function PantallaFase({
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Cronómetro de la pantalla.
+   *
+   * Se pausa cuando la pestaña deja de estar visible: el inspector se sale a
+   * contestar una llamada o a mirar la unidad, y contar ese rato como tiempo
+   * de captura desvirtúa la métrica que el admin va a leer.
+   */
+  const acumulado = useRef(0);
+  // Arranca en null y el reloj se echa a andar en el efecto. Llamar a
+  // Date.now() durante el render es impuro: con Strict Mode o una
+  // re-renderización el valor inicial cambiaría y el conteo saldría mal.
+  const desde = useRef<number | null>(null);
+
+  useEffect(() => {
+    desde.current = Date.now();
+
+    function alCambiarVisibilidad() {
+      if (document.visibilityState === "hidden") {
+        if (desde.current !== null) {
+          acumulado.current += Date.now() - desde.current;
+          desde.current = null;
+        }
+      } else {
+        desde.current = Date.now();
+      }
+    }
+
+    document.addEventListener("visibilitychange", alCambiarVisibilidad);
+    return () =>
+      document.removeEventListener("visibilitychange", alCambiarVisibilidad);
+  }, []);
+
+  function segundosEnPantalla(): number {
+    const enCurso = desde.current !== null ? Date.now() - desde.current : 0;
+    return Math.round((acumulado.current + enCurso) / 1000);
+  }
+
   async function alGuardar() {
     setError(null);
     setEnviando(true);
 
     try {
-      const resultado = await guardarFase(inspeccionId, clavePaso, recolectar());
+      const resultado = await guardarFase(
+        inspeccionId,
+        clavePaso,
+        recolectar(),
+        segundosEnPantalla()
+      );
 
       if (!resultado.ok) {
         setError(resultado.error);

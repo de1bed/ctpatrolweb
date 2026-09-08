@@ -10,6 +10,8 @@ import { calcularResultado } from "@/lib/inspection/resultado";
 import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
 import { capacidadesDe } from "@/lib/inspection/transporte";
 import { createClient } from "@/lib/supabase/server";
+import { clientEnv } from "@/lib/env";
+import QRCode from "qrcode";
 
 import { BarraReporte } from "./barra";
 import "./reporte.css";
@@ -92,6 +94,22 @@ export default async function ReportePage({
 
   // Fases visuales que tienen puntos capturados.
   const fasesVisuales = flujo.pasos.filter((p) => p.fase.puntos);
+
+  // QR de verificación. Se genera como data URI en el servidor para que el
+  // reporte impreso no dependa de que haya red al momento de imprimir.
+  let qrDataUrl: string | null = null;
+  let urlVerificacion: string | null = null;
+
+  if (inspeccion.verification_token && inspeccion.status === "completed") {
+    urlVerificacion = `${clientEnv.NEXT_PUBLIC_APP_URL}/evidencia/${inspeccion.verification_token}`;
+    qrDataUrl = await QRCode.toDataURL(urlVerificacion, {
+      margin: 1,
+      width: 320,
+      // Corrección de errores alta: el reporte se dobla, se mancha y se
+      // fotocopia. Con "M" un QR maltratado deja de leerse.
+      errorCorrectionLevel: "H",
+    });
+  }
 
   const firmas = datos["firmas"] as
     | {
@@ -378,6 +396,33 @@ export default async function ReportePage({
                   </p>
                 </div>
               )}
+            </div>
+          </section>
+        )}
+
+        {/* ── Verificación ────────────────────────────────────────────
+            El QR es lo que hace verificable al papel: quien lo reciba puede
+            confirmar que el folio existe sin llamar por teléfono. */}
+        {qrDataUrl && (
+          <section className="reporte__verificacion">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qrDataUrl} alt="Código QR de verificación" />
+            <div>
+              <h3 style={{ margin: 0 }}>Verificación de autenticidad</h3>
+              <p style={{ margin: "3pt 0 0", fontSize: "9.5pt" }}>
+                Escanea este código para confirmar que esta inspección existe y
+                cuál fue su resultado.
+              </p>
+              <p
+                style={{
+                  margin: "3pt 0 0",
+                  fontSize: "8pt",
+                  wordBreak: "break-all",
+                  fontFamily: "ui-monospace, monospace",
+                }}
+              >
+                {urlVerificacion}
+              </p>
             </div>
           </section>
         )}

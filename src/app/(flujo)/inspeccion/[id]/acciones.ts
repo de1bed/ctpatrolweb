@@ -35,7 +35,9 @@ export type ResultadoGuardado =
 export async function guardarFase(
   inspeccionId: string,
   clavePaso: string,
-  datosCrudos: unknown
+  datosCrudos: unknown,
+  /** Segundos que el inspector pasó en esta pantalla. */
+  segundosEnPantalla = 0
 ): Promise<ResultadoGuardado> {
   const sesion = await requerirSesion();
   const supabase = await createClient();
@@ -47,7 +49,7 @@ export async function guardarFase(
   // ── Estado actual ─────────────────────────────────────────────────────────
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, status, transport_type, is_full, data, progress")
+    .select("id, status, transport_type, is_full, data, progress, timings, started_at")
     .eq("id", inspeccionId)
     .maybeSingle();
 
@@ -120,6 +122,23 @@ export async function guardarFase(
 
   const nuevoProgreso = marcarCompletado(progreso, clavePaso);
 
+  // Tiempo por fase. Se ACUMULA en vez de sobrescribir: si el inspector
+  // vuelve a una pantalla para corregir algo, ese tiempo también es tiempo
+  // que le costó la inspección, y el admin lo necesita para medir de verdad.
+  const tiemposActuales =
+    inspeccion.timings && typeof inspeccion.timings === "object" && !Array.isArray(inspeccion.timings)
+      ? (inspeccion.timings as Record<string, number>)
+      : {};
+
+  // Tope de 2 horas por visita: si el inspector dejó la pestaña abierta toda
+  // la noche, ese número no mide trabajo y contaminaría el promedio.
+  const segundos = Math.min(Math.max(0, Math.round(segundosEnPantalla)), 7200);
+
+  const nuevosTiempos = {
+    ...tiemposActuales,
+    [clavePaso]: (tiemposActuales[clavePaso] ?? 0) + segundos,
+  };
+
   // Primera captura: la inspección pasa de "asignada" a "en curso".
   const arrancando =
     inspeccion.status === "assigned" || inspeccion.status === "draft";
@@ -136,6 +155,7 @@ export async function guardarFase(
       ...columnas,
       data: nuevaData as Json,
       progress: nuevoProgreso as unknown as Json,
+      timings: nuevosTiempos as unknown as Json,
       ...(arrancando
         ? { status: "in_progress" as const, started_at: new Date().toISOString() }
         : {}),
@@ -145,6 +165,13 @@ export async function guardarFase(
             completed_at: new Date().toISOString(),
             passed: resultado.aprobada,
             findings_count: resultado.hallazgos,
+            // Suma de los tiempos por pantalla, NO la resta entre inicio y
+            // fin: esa incluiría las horas que la unidad estuvo cargando
+            // durante la pausa, que no son trabajo del inspector.
+            duration_seconds: Object.values(nuevosTiempos).reduce(
+              (a, b) => a + (typeof b === "number" ? b : 0),
+              0
+            ),
           }
         : {}),
     })

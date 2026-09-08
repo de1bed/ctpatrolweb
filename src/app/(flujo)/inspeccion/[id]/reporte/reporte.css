@@ -166,6 +166,24 @@
   font-size: 9.5pt;
 }
 
+/* Bloque de verificación: QR a la izquierda, explicación a la derecha.
+   Nunca se parte entre páginas — un QR cortado no se lee. */
+.reporte__verificacion {
+  display: flex;
+  align-items: center;
+  gap: 12pt;
+  margin-top: 16pt;
+  border: 1px solid var(--linea);
+  border-radius: 4pt;
+  padding: 10pt;
+  break-inside: avoid;
+}
+.reporte__verificacion img {
+  width: 90pt;
+  height: 90pt;
+  flex-shrink: 0;
+}
+
 .reporte__pie {
   margin-top: 16pt;
   border-top: 1px solid var(--linea);

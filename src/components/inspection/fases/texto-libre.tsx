@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Thermometer, Trash2 } from "lucide-react";
+import { Plus, ScanLine, Thermometer, Trash2, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import { PantallaFase } from "@/components/inspection/phase-shell";
@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { OptionCards } from "@/components/ui/option-cards";
+
+import { EscanerDocumentos } from "@/components/inspection/document-scanner";
+import { cn } from "@/lib/cn";
+import type { Extraccion } from "@/lib/ai/ocr";
 
 import { previo, type PropsFase } from "./tipos";
 
@@ -23,7 +27,28 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
     previo<OtroDoc[]>(props.datosPrevios, "otros", [])
   );
 
+  const [escaneando, setEscaneando] = useState(false);
+  // Campos que la IA leyó con duda. Se resaltan para que el inspector los
+  // coteje contra el papel en vez de darlos por buenos.
+  const [dudosos, setDudosos] = useState<string[]>([]);
+
   const bloqueado = props.soloLectura ?? false;
+
+  function aplicarExtraccion(datos: Extraccion) {
+    // Solo se rellenan los campos VACÍOS: si el inspector ya escribió algo a
+    // mano, su captura manda sobre la lectura automática.
+    if (datos.factura && !factura) setFactura(datos.factura);
+    if (datos.billOfLading && !bl) setBl(datos.billOfLading);
+    if (datos.pedimento && !pedimento) setPedimento(datos.pedimento);
+    if (datos.sellosFiscales && !sellos) setSellos(datos.sellosFiscales);
+    setDudosos(datos.camposDudosos);
+    setEscaneando(false);
+  }
+
+  const marcaDudoso = (campo: string) =>
+    dudosos.includes(campo)
+      ? "border-warn-500 focus:ring-warn-500/15"
+      : undefined;
 
   return (
     <PantallaFase
@@ -42,25 +67,47 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
       })}
     >
       <div className="flex flex-col gap-5">
+        {!bloqueado && (
+          <Button
+            variant="secondary"
+            block
+            onClick={() => setEscaneando(true)}
+            className="justify-start"
+          >
+            <ScanLine className="size-5" aria-hidden />
+            Escanear documento con la cámara
+          </Button>
+        )}
+
+        {dudosos.length > 0 && (
+          <p className="flex items-start gap-2 rounded-xl border border-warn-500/40 bg-warn-50 px-4 py-3 text-sm text-ink-secondary dark:bg-warn-500/10">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn-600" aria-hidden />
+            <span>
+              Revisa contra el papel los campos resaltados: la lectura
+              automática no quedó segura de esos caracteres.
+            </span>
+          </p>
+        )}
+
         <Field label="Factura">
           {(p) => (
-            <Input {...p} value={factura} disabled={bloqueado} onChange={(e) => setFactura(e.target.value)} />
+            <Input {...p} value={factura} disabled={bloqueado} className={cn(marcaDudoso("factura"))} onChange={(e) => setFactura(e.target.value)} />
           )}
         </Field>
 
         <Field label="Bill of Lading">
-          {(p) => <Input {...p} value={bl} disabled={bloqueado} onChange={(e) => setBl(e.target.value)} />}
+          {(p) => <Input {...p} value={bl} disabled={bloqueado} className={cn(marcaDudoso("billOfLading"))} onChange={(e) => setBl(e.target.value)} />}
         </Field>
 
         <Field label="Pedimento">
           {(p) => (
-            <Input {...p} value={pedimento} disabled={bloqueado} onChange={(e) => setPedimento(e.target.value)} />
+            <Input {...p} value={pedimento} disabled={bloqueado} className={cn(marcaDudoso("pedimento"))} onChange={(e) => setPedimento(e.target.value)} />
           )}
         </Field>
 
         <Field label="Sellos fiscales">
           {(p) => (
-            <Input {...p} value={sellos} disabled={bloqueado} onChange={(e) => setSellos(e.target.value)} />
+            <Input {...p} value={sellos} disabled={bloqueado} className={cn(marcaDudoso("sellosFiscales"))} onChange={(e) => setSellos(e.target.value)} />
           )}
         </Field>
 
@@ -122,6 +169,13 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
           </div>
         </div>
       </div>
+
+      {escaneando && (
+        <EscanerDocumentos
+          onExtraer={aplicarExtraccion}
+          onCerrar={() => setEscaneando(false)}
+        />
+      )}
     </PantallaFase>
   );
 }

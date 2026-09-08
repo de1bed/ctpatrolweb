@@ -456,6 +456,8 @@ export type Database = {
           tractor_number: string | null
           transport_type: Database["public"]["Enums"]["transport_type"] | null
           updated_at: string
+          verification_revoked_at: string | null
+          verification_token: string | null
         }
         Insert: {
           ai?: Json
@@ -500,6 +502,8 @@ export type Database = {
           tractor_number?: string | null
           transport_type?: Database["public"]["Enums"]["transport_type"] | null
           updated_at?: string
+          verification_revoked_at?: string | null
+          verification_token?: string | null
         }
         Update: {
           ai?: Json
@@ -544,6 +548,8 @@ export type Database = {
           tractor_number?: string | null
           transport_type?: Database["public"]["Enums"]["transport_type"] | null
           updated_at?: string
+          verification_revoked_at?: string | null
+          verification_token?: string | null
         }
         Relationships: [
           {
@@ -799,6 +805,18 @@ export type Database = {
       }
       is_account_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      verificar_inspeccion: {
+        Args: { token: string }
+        Returns: {
+          folio: string
+          empresa: string
+          fecha_inspeccion: string
+          tipo_transporte: string
+          tractor: string | null
+          resultado: string
+          hallazgos: number
+        }[]
+      }
     }
     Enums: {
       catalog_storage_mode: "persist" | "ephemeral"
