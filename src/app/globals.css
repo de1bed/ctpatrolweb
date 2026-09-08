@@ -1,26 +1,283 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   CTPatrol · Sistema de diseño
+
+   El contexto manda el diseño. Quien usa esto está parado en un patio, con
+   sol directo, sosteniendo el teléfono con una mano y a veces con guantes.
+   De ahí salen las decisiones:
+
+     · Contraste alto. Un gris clarito sobre blanco no se ve al sol.
+     · Áreas táctiles de 44px o más. Con guantes, un botón chico no se atina.
+     · Tipografía un punto más grande que la de una web normal.
+     · Modo oscuro de verdad: muchas inspecciones son de noche y una pantalla
+       blanca a las 3 a.m. deslumbra y arruina la visión nocturna.
+   ========================================================================== */
+
+@theme {
+  /* ── Marca ──────────────────────────────────────────────────────────────
+     Azul profundo, heredado de la app anterior para no romper el
+     reconocimiento de la herramienta entre los inspectores.            */
+  --color-brand-50:  #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+  --color-brand-900: #1e3a8a;
+  --color-brand-950: #172554;
+
+  /* ── Semánticos ─────────────────────────────────────────────────────────
+     Nunca se usan solos para comunicar: siempre acompañados de ícono y
+     texto. Un inspector daltónico tiene que poder trabajar igual.       */
+  --color-ok-50:  #ecfdf5;
+  --color-ok-500: #10b981;
+  --color-ok-600: #059669;
+  --color-ok-700: #047857;
+
+  --color-warn-50:  #fffbeb;
+  --color-warn-500: #f59e0b;
+  --color-warn-600: #d97706;
+  --color-warn-700: #b45309;
+
+  --color-danger-50:  #fef2f2;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+
+  /* ── Tipografía ─────────────────────────────────────────────────────────
+     Pila del sistema: se ve nativa en cada plataforma y no cuesta ni un
+     byte de descarga. En una app que se abre con mala señal, eso importa
+     más que una fuente bonita.                                          */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Escala ligeramente mayor que la de Tailwind por defecto. */
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.3125rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  1.875rem;
+  --text-4xl:  2.25rem;
+
+  /* Esquinas generosas: lee como app, no como formulario corporativo. */
+  --radius-lg:  0.75rem;
+  --radius-xl:  1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+}
+
+/* ── Superficies ─────────────────────────────────────────────────────────
+   Se definen como variables y no como clases fijas para que el tema
+   oscuro sea un cambio de valores, no un segundo juego de clases.     */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --surface:         #ffffff;
+  --surface-sunken:  #f1f5f9;
+  --surface-raised:  #ffffff;
+  --surface-overlay: #ffffff;
+
+  --border-subtle:   #e2e8f0;
+  --border-strong:   #cbd5e1;
+
+  --text-primary:    #0f172a;
+  --text-secondary:  #475569;
+  --text-muted:      #64748b;
+  --text-inverse:    #ffffff;
+
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 12px rgb(15 23 42 / 0.06);
+  --shadow-bar:  0 -1px 0 rgb(15 23 42 / 0.06), 0 -8px 24px rgb(15 23 42 / 0.06);
+
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* El tema oscuro responde a la preferencia del sistema, pero un
+   data-theme explícito siempre gana: el inspector puede forzarlo desde
+   ajustes sin pelearse con la configuración del teléfono. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --surface:         #0b1220;
+    --surface-sunken:  #060b14;
+    --surface-raised:  #111c30;
+    --surface-overlay: #16223a;
+
+    --border-subtle:   #1e2d47;
+    --border-strong:   #2c4062;
+
+    --text-primary:    #f1f5f9;
+    --text-secondary:  #b3c1d6;
+    --text-muted:      #8497b3;
+    --text-inverse:    #0b1220;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.35);
+    --shadow-bar:  0 -1px 0 rgb(0 0 0 / 0.4), 0 -8px 24px rgb(0 0 0 / 0.45);
+
+    color-scheme: dark;
   }
 }
 
+:root[data-theme="dark"] {
+  --surface:         #0b1220;
+  --surface-sunken:  #060b14;
+  --surface-raised:  #111c30;
+  --surface-overlay: #16223a;
+
+  --border-subtle:   #1e2d47;
+  --border-strong:   #2c4062;
+
+  --text-primary:    #f1f5f9;
+  --text-secondary:  #b3c1d6;
+  --text-muted:      #8497b3;
+  --text-inverse:    #0b1220;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.35);
+  --shadow-bar:  0 -1px 0 rgb(0 0 0 / 0.4), 0 -8px 24px rgb(0 0 0 / 0.45);
+
+  color-scheme: dark;
+}
+
+/* Expone las superficies como colores de Tailwind: bg-surface, text-ink… */
+@theme inline {
+  --color-surface:         var(--surface);
+  --color-surface-sunken:  var(--surface-sunken);
+  --color-surface-raised:  var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+
+  --color-line:            var(--border-subtle);
+  --color-line-strong:     var(--border-strong);
+
+  --color-ink:             var(--text-primary);
+  --color-ink-secondary:   var(--text-secondary);
+  --color-ink-muted:       var(--text-muted);
+  --color-ink-inverse:     var(--text-inverse);
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+html {
+  /* Safari en horizontal agranda el texto por su cuenta y rompe el layout. */
+  -webkit-text-size-adjust: 100%;
+  /* Mata el retardo de 300ms del doble tap. */
+  touch-action: manipulation;
+  height: 100%;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--surface-sunken);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  /* Sin el rebote elástico, la pantalla deja de sentirse "página web". */
+  overscroll-behavior-y: none;
+  /* Sin el flash gris azuloso al tocar en Android. */
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100%;
+}
+
+/* Los elementos de chrome (barras, botones, tabs) no se seleccionan: en móvil
+   una pulsación larga sacaba el menú de copiar y se sentía roto. El contenido
+   de la inspección sí se puede seleccionar, se restaura más abajo. */
+button,
+[role="button"],
+nav,
+label {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[data-selectable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* iOS hace zoom al enfocar un campo de menos de 16px. Se ve como un salto
+   brusco y desorienta. El mínimo es 16px, sin excepción. */
+input,
+select,
+textarea {
+  font-size: max(1rem, 16px);
+}
+
+/* Foco visible solo con teclado: el anillo en cada tap en móvil estorba,
+   pero quitarlo del todo deja fuera a quien navega con teclado. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+::selection {
+  background-color: var(--color-brand-200);
+  color: var(--color-brand-950);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Utilidades
+
+   Áreas seguras: el notch arriba y la barra de gestos abajo. Sin esto, en
+   un iPhone el título queda tapado y el botón de acción cae debajo de la
+   barra del sistema.
+   ========================================================================== */
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@utility px-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Alto real de la ventana. En móvil 100vh incluye la barra del navegador
+   que se esconde al hacer scroll, así que el contenido queda cortado.
+   100dvh sí se ajusta. */
+@utility h-screen-safe {
+  height: 100dvh;
+}
+@utility min-h-screen-safe {
+  min-height: 100dvh;
+}
+
+/* Superficie de toque mínima cómoda, aunque el ícono sea chico. */
+@utility tappable {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Scroll horizontal sin barra visible: para tiras de fotos y selectores
+   de fase. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
