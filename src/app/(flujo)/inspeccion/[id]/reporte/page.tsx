@@ -14,6 +14,7 @@ import { clientEnv } from "@/lib/env";
 import QRCode from "qrcode";
 
 import { BarraReporte } from "./barra";
+import { CompartirReporte } from "./compartir";
 import "./reporte.css";
 
 export const metadata: Metadata = { title: "Reporte" };
@@ -434,6 +435,15 @@ export default async function ReportePage({
           coordenadas impresas en la propia imagen.
         </footer>
       </article>
+
+      {inspeccion.status === "completed" && (
+        <CompartirReporte
+          folio={inspeccion.display_id}
+          urlVerificacion={urlVerificacion}
+          resultado={resultado.aprobada ? "aprobada" : "rechazada"}
+          transportista={inspeccion.customer_name}
+        />
+      )}
     </>
   );
 }
