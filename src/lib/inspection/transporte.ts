@@ -36,6 +36,9 @@ export type CapacidadesTransporte = {
   /** ¿Puede ir en configuración doble (full)? */
   admiteFull: boolean;
 
+  /** ¿Lleva sistema de refrigeración cuya temperatura hay que registrar? */
+  requiereTemperatura: boolean;
+
   /**
    * Cuántos espacios de carga se inspeccionan en configuración sencilla.
    *
@@ -61,6 +64,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereInspeccionExterna: true,
     requierePlacasRemolque: true,
     admiteFull: true,
+    requiereTemperatura: false,
     unidadesDeCarga: 1,
     unidadArrastre: "remolque",
   },
@@ -76,6 +80,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     // de negocio por cuenta propia. Pendiente de confirmar con David.
     requierePlacasRemolque: false,
     admiteFull: true,
+    requiereTemperatura: true,
     unidadesDeCarga: 1,
     unidadArrastre: "remolque",
   },
@@ -87,6 +92,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereInspeccionExterna: true,
     requierePlacasRemolque: true,
     admiteFull: true,
+    requiereTemperatura: false,
     unidadesDeCarga: 1,
     unidadArrastre: "contenedor",
   },
@@ -107,6 +113,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requierePlacasRemolque: false,
     // El tipo original marcaba "full NO disponible para plataforma".
     admiteFull: false,
+    requiereTemperatura: false,
     unidadesDeCarga: 1,
     unidadArrastre: "remolque",
   },
@@ -122,6 +129,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereInspeccionExterna: false,
     requierePlacasRemolque: false,
     admiteFull: false,
+    requiereTemperatura: false,
     unidadesDeCarga: 1,
     unidadArrastre: null,
   },
@@ -133,6 +141,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereInspeccionExterna: false,
     requierePlacasRemolque: false,
     admiteFull: false,
+    requiereTemperatura: false,
     unidadesDeCarga: 1,
     unidadArrastre: null,
   },
@@ -144,6 +153,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereInspeccionExterna: false,
     requierePlacasRemolque: false,
     admiteFull: false,
+    requiereTemperatura: false,
     unidadesDeCarga: 1,
     unidadArrastre: null,
   },
@@ -158,6 +168,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereInspeccionExterna: false,
     requierePlacasRemolque: false,
     admiteFull: false,
+    requiereTemperatura: false,
     unidadesDeCarga: 0,
     unidadArrastre: null,
   },
@@ -169,6 +180,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereInspeccionExterna: false,
     requierePlacasRemolque: false,
     admiteFull: false,
+    requiereTemperatura: false,
     unidadesDeCarga: 0,
     unidadArrastre: null,
   },

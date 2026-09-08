@@ -82,6 +82,23 @@ describe("construirFlujo · fases condicionales", () => {
     assert.ok(c.includes("tractor-visual"));
   });
 
+  it("solo la caja refrigerada pide temperaturas", () => {
+    const refrigerada = claves(base({ tipoTransporte: "caja_refrigerada" }));
+    assert.ok(
+      refrigerada.some((k) => k.startsWith("temperaturas")),
+      "una caja refrigerada debe registrar temperaturas"
+    );
+
+    for (const tipo of TIPOS_TRANSPORTE) {
+      if (tipo === "caja_refrigerada") continue;
+      const c = claves(base({ tipoTransporte: tipo }));
+      assert.ok(
+        !c.some((k) => k.startsWith("temperaturas")),
+        `${tipo} no lleva refrigeración y no debería pedir temperaturas`
+      );
+    }
+  });
+
   it("explica por qué omitió cada fase", () => {
     const flujo = construirFlujo(base({ tipoTransporte: "pipa" }));
     assert.ok(flujo.omitidas.length > 0);

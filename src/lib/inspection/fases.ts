@@ -29,6 +29,7 @@ export type FaseId =
   | "placas-remolque"
   | "inspeccion-externa"
   | "pausa"
+  | "temperaturas"
   | "sellos"
   | "agricola"
   | "estado-salida"
@@ -215,6 +216,17 @@ export const FASES: DefinicionFase[] = [
   },
 
   // ── Cierre ────────────────────────────────────────────────────────────────
+  {
+    id: "temperaturas",
+    nombre: "Temperaturas",
+    descripcion: "Lecturas del sistema de refrigeración",
+    grupo: "cierre",
+    critica: false,
+    aplica: (ctx) =>
+      capacidadesDe(ctx.tipoTransporte)?.requiereTemperatura ?? false,
+    razonNoAplica: "Este transporte no lleva sistema de refrigeración",
+    porUnidad: true,
+  },
   {
     id: "sellos",
     nombre: "Sellos",

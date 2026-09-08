@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Thermometer, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { PantallaFase } from "@/components/inspection/phase-shell";
@@ -292,6 +292,111 @@ export function FaseComentarios(props: PropsFase) {
         >
           <Plus className="size-5" aria-hidden />
           Agregar comentario
+        </Button>
+      </div>
+    </PantallaFase>
+  );
+}
+
+type Lectura = { ubicacion: string; temperatura: string };
+
+/**
+ * Fase · Temperaturas de caja refrigerada.
+ *
+ * Solo aparece para transporte refrigerado; el motor la omite en el resto.
+ * Se piden varias lecturas porque una sola en la puerta no dice nada: el
+ * fondo de una caja mal enfriada puede estar diez grados arriba.
+ */
+export function FaseTemperaturas(props: PropsFase) {
+  const [lecturas, setLecturas] = useState<Lectura[]>(() => {
+    const previas = previo<Lectura[]>(props.datosPrevios, "lecturas", []);
+    return previas.length > 0
+      ? previas
+      : // Arranca con los tres puntos habituales para que el inspector no
+        // tenga que escribirlos cada vez.
+        [
+          { ubicacion: "Frente (cerca del equipo)", temperatura: "" },
+          { ubicacion: "Centro", temperatura: "" },
+          { ubicacion: "Fondo (puerta)", temperatura: "" },
+        ];
+  });
+
+  const incompletas = lecturas.filter(
+    (l) => !l.ubicacion.trim() || !l.temperatura.trim()
+  ).length;
+
+  const caja = props.contexto.unidad;
+
+  return (
+    <PantallaFase
+      {...props}
+      descripcion={
+        caja
+          ? `Lecturas del sistema de refrigeración de la caja ${caja}.`
+          : "Lecturas del sistema de refrigeración."
+      }
+      faltante={
+        incompletas > 0
+          ? `Faltan ${incompletas} ${incompletas === 1 ? "lectura" : "lecturas"}`
+          : null
+      }
+      recolectar={() => ({ lecturas })}
+    >
+      <div className="flex flex-col gap-2.5">
+        {lecturas.map((l, i) => (
+          <Card key={i} className="p-3">
+            <div className="flex items-start gap-2">
+              <Thermometer
+                className="mt-3 size-5 shrink-0 text-brand-600"
+                aria-hidden
+              />
+              <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
+                <Input
+                  value={l.ubicacion}
+                  placeholder="Dónde se midió"
+                  onChange={(e) =>
+                    setLecturas((p) =>
+                      p.map((x, j) =>
+                        j === i ? { ...x, ubicacion: e.target.value } : x
+                      )
+                    )
+                  }
+                />
+                <Input
+                  value={l.temperatura}
+                  placeholder="Ej. -18.5 °C"
+                  onChange={(e) =>
+                    setLecturas((p) =>
+                      p.map((x, j) =>
+                        j === i ? { ...x, temperatura: e.target.value } : x
+                      )
+                    )
+                  }
+                />
+              </div>
+              {lecturas.length > 1 && (
+                <button
+                  type="button"
+                  aria-label={`Quitar lectura ${i + 1}`}
+                  onClick={() => setLecturas((p) => p.filter((_, j) => j !== i))}
+                  className="flex size-11 shrink-0 items-center justify-center rounded-lg text-danger-600 transition-colors active:bg-danger-50"
+                >
+                  <Trash2 className="size-5" aria-hidden />
+                </button>
+              )}
+            </div>
+          </Card>
+        ))}
+
+        <Button
+          variant="secondary"
+          onClick={() =>
+            setLecturas((p) => [...p, { ubicacion: "", temperatura: "" }])
+          }
+          className="justify-start"
+        >
+          <Plus className="size-5" aria-hidden />
+          Agregar lectura
         </Button>
       </div>
     </PantallaFase>

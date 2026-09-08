@@ -23,6 +23,7 @@ import {
   FaseAgricola,
   FaseComentarios,
   FaseDocumentos,
+  FaseTemperaturas,
 } from "@/components/inspection/fases/texto-libre";
 import { FaseTipoTransporte } from "@/components/inspection/fases/tipo-transporte";
 import { FaseVisual } from "@/components/inspection/fases/visual";
@@ -125,6 +126,9 @@ export default async function PasoPage({
 
     case "estado-salida":
       return <FaseEstadoSalida {...base} />;
+
+    case "temperaturas":
+      return <FaseTemperaturas {...base} />;
 
     case "agricola":
       return <FaseAgricola {...base} />;

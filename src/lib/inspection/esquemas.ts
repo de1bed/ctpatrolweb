@@ -118,6 +118,20 @@ export const esquemaSellos = z.object({
     .min(1, "Registra al menos un sello"),
 });
 
+export const esquemaTemperaturas = z.object({
+  lecturas: z
+    .array(
+      z.object({
+        ubicacion: z.string().trim().min(1, "Indica dónde se midió").max(120),
+        // Texto y no número: los termómetros de patio dan lecturas como
+        // "-18.5" pero también "-18 a -20", y forzar un número obligaría al
+        // inspector a inventar precisión que no tiene.
+        temperatura: z.string().trim().min(1, "Falta la lectura").max(40),
+      })
+    )
+    .min(1, "Registra al menos una lectura"),
+});
+
 export const esquemaAgricola = z.object({
   externaLimpia: z.boolean(),
   externaNota: textoOpcional,
@@ -167,6 +181,7 @@ export const ESQUEMAS: Record<FaseId, z.ZodTypeAny> = {
   "placas-remolque": esquemaPlacasRemolque,
   "inspeccion-externa": esquemaVisual,
   pausa: esquemaVacio,
+  temperaturas: esquemaTemperaturas,
   sellos: esquemaSellos,
   agricola: esquemaAgricola,
   "estado-salida": esquemaEstadoSalida,
