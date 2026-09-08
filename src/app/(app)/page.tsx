@@ -1,10 +1,8 @@
-import { formatDistanceToNow } from "date-fns";
-import { es } from "date-fns/locale";
-import { ChevronRight, Lock, Plus, Truck } from "lucide-react";
+import { Lock, Plus, Truck } from "lucide-react";
 import Link from "next/link";
 
 import { AppHeader } from "@/components/shell/app-header";
-import { StatusBadge } from "@/components/inspection/status-badge";
+import { InspectionCard } from "@/components/inspection/inspection-card";
 import { Card } from "@/components/ui/card";
 import { obtenerPermisos, requerirSesion } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -92,35 +90,7 @@ export default async function InicioPage() {
             <ul className="grid gap-3 sm:grid-cols-2">
               {pendientes.map((insp) => (
                 <li key={insp.id}>
-                  <Link href={`/inspeccion/${insp.id}`} className="block">
-                    <Card
-                      interactive
-                      className="flex items-center gap-3 p-4 hover:border-line-strong"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <StatusBadge estado={insp.status} />
-                        </div>
-                        <p className="mt-2 truncate text-base font-semibold text-ink">
-                          {insp.customer_name ?? "Sin transportista"}
-                        </p>
-                        <p className="mt-0.5 truncate text-sm text-ink-secondary">
-                          <span className="font-mono">{insp.display_id}</span>
-                          {insp.tractor_number && ` · ${insp.tractor_number}`}
-                        </p>
-                        <p className="mt-1 text-xs text-ink-muted">
-                          {formatDistanceToNow(new Date(insp.updated_at), {
-                            addSuffix: true,
-                            locale: es,
-                          })}
-                        </p>
-                      </div>
-                      <ChevronRight
-                        className="size-5 shrink-0 text-ink-muted"
-                        aria-hidden
-                      />
-                    </Card>
-                  </Link>
+                  <InspectionCard inspeccion={insp} />
                 </li>
               ))}
             </ul>

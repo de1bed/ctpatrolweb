@@ -8,6 +8,7 @@ import { ESQUEMAS, PROYECCIONES } from "@/lib/inspection/esquemas";
 import { FASES_POR_ID, type FaseId } from "@/lib/inspection/fases";
 import { construirFlujo, puedeAbrir } from "@/lib/inspection/flujo";
 import { leerProgreso, marcarCompletado } from "@/lib/inspection/progreso";
+import { calcularResultado } from "@/lib/inspection/resultado";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -123,6 +124,12 @@ export async function guardarFase(
   const arrancando =
     inspeccion.status === "assigned" || inspeccion.status === "draft";
 
+  // Las firmas cierran el expediente. A partir de aquí RLS impide que el
+  // inspector lo siga editando: la política `inspections_update_own` excluye
+  // los estados 'completed' y 'cancelled'.
+  const cerrando = faseId === "firmas";
+  const resultado = cerrando ? calcularResultado(nuevaData as Json) : null;
+
   const { error } = await supabase
     .from("inspections")
     .update({
@@ -131,6 +138,14 @@ export async function guardarFase(
       progress: nuevoProgreso as unknown as Json,
       ...(arrancando
         ? { status: "in_progress" as const, started_at: new Date().toISOString() }
+        : {}),
+      ...(resultado
+        ? {
+            status: "completed" as const,
+            completed_at: new Date().toISOString(),
+            passed: resultado.aprobada,
+            findings_count: resultado.hallazgos,
+          }
         : {}),
     })
     .eq("id", inspeccionId);
@@ -148,8 +163,10 @@ export async function guardarFase(
   await supabase.from("inspection_events").insert({
     inspection_id: inspeccionId,
     actor_id: sesion.userId,
-    event: "phase_completed",
-    payload: { paso: clavePaso } as Json,
+    event: cerrando ? "completed" : "phase_completed",
+    payload: (cerrando
+      ? { paso: clavePaso, aprobada: resultado?.aprobada, hallazgos: resultado?.hallazgos }
+      : { paso: clavePaso }) as Json,
   });
 
   // Se recalcula el flujo YA con esta fase marcada: cambiar el tipo de

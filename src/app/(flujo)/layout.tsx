@@ -1,3 +1,4 @@
+import { Uploader } from "@/components/inspection/uploader";
 import { requerirSesion } from "@/lib/auth";
 
 /**
@@ -16,9 +17,18 @@ import { requerirSesion } from "@/lib/auth";
  * Es también la razón práctica de que este grupo exista: la barra de
  * pestañas y el botón fijo de "Continuar" viven los dos pegados abajo, y
  * juntos se encimaban.
+ *
+ * El sincronizador se monta aquí y no en cada pantalla: así sigue subiendo
+ * evidencia mientras el inspector avanza de fase, sin reiniciarse en cada
+ * navegación.
  */
 export default async function FlujoLayout({ children }: LayoutProps<"/">) {
-  await requerirSesion();
+  const sesion = await requerirSesion();
 
-  return <div className="min-h-screen-safe bg-surface-sunken">{children}</div>;
+  return (
+    <div className="min-h-screen-safe bg-surface-sunken">
+      {children}
+      <Uploader companyAccountId={sesion.companyAccountId} />
+    </div>
+  );
 }
