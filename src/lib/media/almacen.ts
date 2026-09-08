@@ -23,9 +23,16 @@ import Dexie, { type Table } from "dexie";
 
 export type EstadoSubida = "pendiente" | "subiendo" | "subida" | "fallida";
 
+export type TipoMedia = "foto" | "video";
+
 export type FotoLocal = {
   /** Generado en el dispositivo. Es la identidad de la foto desde que nace. */
   clientId: string;
+  /**
+   * Foto o video. El protocolo VVTT de sellos exige un clip corto jalando y
+   * girando: una foto no prueba que se hizo la maniobra.
+   */
+  tipo: TipoMedia;
   inspeccionId: string;
   /** Paso del flujo al que pertenece (ej. "tractor-visual", "sellos#2"). */
   paso: string;
@@ -37,6 +44,8 @@ export type FotoLocal = {
   mimeType: string;
   ancho: number;
   alto: number;
+  /** Solo para video. */
+  duracionSegundos?: number;
 
   /** Metadatos que hacen de la foto una evidencia y no solo una imagen. */
   capturadaEn: string;
@@ -59,6 +68,22 @@ class BaseLocal extends Dexie {
       // inspección, por paso y por lo que falta subir.
       fotos: "clientId, inspeccionId, paso, estado, [inspeccionId+paso]",
     });
+
+    // v2 agrega el tipo (foto o video). Los registros que ya existían son
+    // fotos: el video se introdujo después, así que la migración solo tiene
+    // que ponerles la etiqueta que les corresponde.
+    this.version(2)
+      .stores({
+        fotos: "clientId, inspeccionId, paso, estado, tipo, [inspeccionId+paso]",
+      })
+      .upgrade((tx) =>
+        tx
+          .table<FotoLocal>("fotos")
+          .toCollection()
+          .modify((f) => {
+            f.tipo ??= "foto";
+          })
+      );
   }
 }
 
@@ -77,9 +102,12 @@ function base(): BaseLocal {
 }
 
 export async function guardarFoto(
-  foto: Omit<FotoLocal, "estado" | "intentos" | "ultimoError" | "storagePath">
+  foto: Omit<FotoLocal, "estado" | "intentos" | "ultimoError" | "storagePath" | "tipo"> & {
+    tipo?: TipoMedia;
+  }
 ): Promise<FotoLocal> {
   const completa: FotoLocal = {
+    tipo: "foto",
     ...foto,
     estado: "pendiente",
     intentos: 0,

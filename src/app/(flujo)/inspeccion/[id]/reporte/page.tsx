@@ -50,17 +50,21 @@ export default async function ReportePage({
 
   const { data: evidencia } = await supabase
     .from("inspection_media")
-    .select("id, phase, point_key, point_label, storage_path, captured_at, latitude, longitude")
+    .select("id, kind, phase, point_key, point_label, storage_path, captured_at, latitude, longitude, duration_seconds")
     .eq("inspection_id", id)
     .not("storage_path", "is", null)
     .order("phase")
     .order("sort_order");
 
-  const fotos = evidencia ?? [];
+  // Fotos y videos se separan: un <img> apuntando a un mp4 sale roto, y el
+  // clip de sello necesita reproductor, no marco de imagen.
+  const todaLaEvidencia = evidencia ?? [];
+  const fotos = todaLaEvidencia.filter((m) => m.kind !== "video");
+  const videos = todaLaEvidencia.filter((m) => m.kind === "video");
 
   // Enlaces firmados de vida corta. El bucket es privado: la evidencia no
   // debe quedar accesible con una URL permanente que alguien pueda reenviar.
-  const rutas = fotos.map((f) => f.storage_path!).filter(Boolean);
+  const rutas = todaLaEvidencia.map((f) => f.storage_path!).filter(Boolean);
   const { data: firmados } = rutas.length
     ? await supabase.storage
         .from("inspection-media")
@@ -181,7 +185,8 @@ export default async function ReportePage({
           <h2>Resumen</h2>
           <p style={{ margin: 0 }}>
             Se revisaron {contarPuntos(datos, fasesVisuales)} puntos de inspección
-            con {fotos.length} evidencias fotográficas.{" "}
+            con {fotos.length} evidencias fotográficas
+            {videos.length > 0 && ` y ${videos.length} ${videos.length === 1 ? "clip" : "clips"} de sello`}.{" "}
             {resultado.hallazgos === 0 ? (
               <>No se registraron hallazgos.</>
             ) : (
@@ -289,6 +294,56 @@ export default async function ReportePage({
                             {foto.latitude.toFixed(5)}, {foto.longitude.toFixed(5)}
                           </>
                         )}
+                      </figcaption>
+                    </figure>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ── Clips de sellos ─────────────────────────────────────────
+            En papel un video no se ve, así que además del reproductor se
+            imprime la constancia de que existe, con su duración y momento.
+            El expediente digital sí lo reproduce. */}
+        {videos.length > 0 && (
+          <section>
+            <h2>Clips de verificación de sellos</h2>
+            <table className="reporte__tabla">
+              <thead>
+                <tr>
+                  <th style={{ width: "40%" }}>Sello</th>
+                  <th style={{ width: "15%" }}>Duración</th>
+                  <th>Momento de captura</th>
+                </tr>
+              </thead>
+              <tbody>
+                {videos.map((v) => (
+                  <tr key={v.id}>
+                    <td>{v.point_label ?? v.point_key}</td>
+                    <td>{v.duration_seconds ? `${v.duration_seconds} s` : "—"}</td>
+                    <td>
+                      {format(new Date(v.captured_at), "dd/MM/yyyy HH:mm:ss")}
+                      {v.latitude != null &&
+                        v.longitude != null &&
+                        ` · ${v.latitude.toFixed(5)}, ${v.longitude.toFixed(5)}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="no-imprimir reporte__fotos" style={{ marginTop: "8pt" }}>
+              {videos.map((v) => {
+                const url = v.storage_path ? urlPorRuta.get(v.storage_path) : null;
+                if (!url) return null;
+                return (
+                  <div className="reporte__foto" key={`video-${v.id}`}>
+                    <figure>
+                      <video src={url} controls playsInline preload="metadata" />
+                      <figcaption>
+                        <strong>{v.point_label ?? v.point_key}</strong>
                       </figcaption>
                     </figure>
                   </div>

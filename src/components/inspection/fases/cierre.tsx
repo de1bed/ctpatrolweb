@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, PauseCircle, Plus, ShieldCheck, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Check, PauseCircle, Plus, ShieldCheck, Trash2, Video } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PantallaFase } from "@/components/inspection/phase-shell";
 import { SignaturePad } from "@/components/inspection/signature-pad";
@@ -10,6 +10,13 @@ import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
 import { PASOS_VVTT, type PasoVvtt } from "@/lib/inspection/puntos";
+import { GrabadoraVideo } from "@/components/inspection/video-recorder";
+import { borrarFoto, fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
+import {
+  DURACION_MAXIMA,
+  DURACION_MINIMA,
+  type VideoCapturado,
+} from "@/lib/media/video";
 
 import { previo, type PropsFase } from "./tipos";
 
@@ -31,19 +38,90 @@ const SELLO_NUEVO: Sello = {
  * revisado" invitaría a palomearlo sin haber jalado nada; obligar a cuatro
  * toques conscientes es justo el punto del protocolo.
  */
-export function FaseSellos(props: PropsFase) {
+export function FaseSellos(
+  props: PropsFase & { latitud?: number | null; longitud?: number | null }
+) {
   const [sellos, setSellos] = useState<Sello[]>(() => {
     const previos = previo<Sello[]>(props.datosPrevios, "sellos", []);
     return previos.length > 0 ? previos : [{ ...SELLO_NUEVO }];
   });
 
+  const [videos, setVideos] = useState<Record<string, FotoLocal>>({});
+  const [grabando, setGrabando] = useState<number | null>(null);
+
+  // Clips ya grabados de este paso, para no perderlos al volver.
+  useEffect(() => {
+    let vivo = true;
+    fotosDePaso(props.inspeccionId, props.clavePaso).then((lista) => {
+      if (!vivo) return;
+      const porPunto: Record<string, FotoLocal> = {};
+      for (const f of lista) porPunto[f.puntoClave] = f;
+      setVideos(porPunto);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [props.inspeccionId, props.clavePaso]);
+
+  const urls = useMemo(() => {
+    const mapa: Record<string, string> = {};
+    for (const [clave, v] of Object.entries(videos)) {
+      mapa[clave] = URL.createObjectURL(v.blob);
+    }
+    return mapa;
+  }, [videos]);
+
+  useEffect(() => {
+    return () => {
+      for (const url of Object.values(urls)) URL.revokeObjectURL(url);
+    };
+  }, [urls]);
+
   function actualizar(i: number, cambios: Partial<Sello>) {
     setSellos((prev) => prev.map((s, j) => (j === i ? { ...s, ...cambios } : s)));
   }
 
+  async function alGrabar(video: VideoCapturado, capturadoEn: string) {
+    if (grabando === null) return;
+    const clave = `sello_${grabando + 1}`;
+
+    // Regrabar reemplaza: guardar los dos descartes llenaría el dispositivo.
+    const anterior = videos[clave];
+    if (anterior) await borrarFoto(anterior.clientId);
+
+    const guardado = await guardarFoto({
+      clientId: crypto.randomUUID(),
+      tipo: "video",
+      inspeccionId: props.inspeccionId,
+      paso: props.clavePaso,
+      puntoClave: clave,
+      puntoNombre: `Sello ${sellos[grabando]?.numero || grabando + 1}`,
+      blob: video.blob,
+      mimeType: video.mimeType,
+      // El clip no tiene dimensiones fijas conocidas aquí; el reporte lo
+      // muestra con la relación de aspecto que traiga el archivo.
+      ancho: 1,
+      alto: 1,
+      duracionSegundos: video.duracionSegundos,
+      capturadaEn: capturadoEn,
+      latitud: props.latitud ?? null,
+      longitud: props.longitud ?? null,
+    });
+
+    setVideos((prev) => ({ ...prev, [clave]: guardado }));
+    setGrabando(null);
+  }
+
   const incompletos = sellos.filter(
-    (s) =>
-      !s.numero.trim() || !s.ver || !s.verificar || !s.jalar || !s.girar
+    (s, i) =>
+      !s.numero.trim() ||
+      !s.ver ||
+      !s.verificar ||
+      !s.jalar ||
+      !s.girar ||
+      // El clip es parte del protocolo, no un extra: sin él no hay prueba de
+      // que se jaló y giró.
+      !videos[`sello_${i + 1}`]
   );
 
   const caja = props.contexto.unidad;
@@ -138,6 +216,53 @@ export function FaseSellos(props: PropsFase) {
                 })}
               </div>
             </div>
+
+            {/* ── Clip de evidencia ─────────────────────────────────────
+                Cuatro palomas se marcan en tres segundos sin tocar nada. El
+                video de la maniobra es lo que convierte el protocolo en algo
+                verificable. */}
+            <div className="mt-4 border-t border-line pt-4">
+              <p className="mb-2 text-sm font-medium text-ink-secondary">
+                Clip jalando y girando ({DURACION_MINIMA}-{DURACION_MAXIMA} s)
+              </p>
+
+              {videos[`sello_${i + 1}`] && urls[`sello_${i + 1}`] ? (
+                <div className="flex items-center gap-3">
+                  <video
+                    src={urls[`sello_${i + 1}`]}
+                    controls
+                    playsInline
+                    className="h-24 w-32 shrink-0 rounded-xl border border-ok-600 bg-black object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-ok-700 dark:text-ok-500">
+                      <Check className="size-4" strokeWidth={3} aria-hidden />
+                      Grabado
+                      {videos[`sello_${i + 1}`].duracionSegundos
+                        ? ` · ${videos[`sello_${i + 1}`].duracionSegundos}s`
+                        : ""}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setGrabando(i)}
+                      className="mt-1 text-sm font-medium text-brand-600"
+                    >
+                      Volver a grabar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  variant="secondary"
+                  block
+                  onClick={() => setGrabando(i)}
+                  className="justify-start"
+                >
+                  <Video className="size-5" aria-hidden />
+                  Grabar clip del sello
+                </Button>
+              )}
+            </div>
           </Card>
         ))}
 
@@ -150,6 +275,16 @@ export function FaseSellos(props: PropsFase) {
           Agregar otro sello
         </Button>
       </div>
+
+      {grabando !== null && (
+        <GrabadoraVideo
+          selloNumero={sellos[grabando]?.numero ?? ""}
+          latitud={props.latitud ?? null}
+          longitud={props.longitud ?? null}
+          onCapturar={alGrabar}
+          onCerrar={() => setGrabando(null)}
+        />
+      )}
     </PantallaFase>
   );
 }

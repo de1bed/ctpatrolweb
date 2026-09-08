@@ -19,6 +19,8 @@ import { createClient } from "@/lib/supabase/server";
 const esquema = z.object({
   inspeccionId: z.string().uuid(),
   clientId: z.string().min(1).max(64),
+  tipo: z.enum(["foto", "video"]).default("foto"),
+  duracionSegundos: z.number().nonnegative().nullable().optional(),
   paso: z.string().min(1).max(64),
   puntoClave: z.string().max(120).nullable(),
   puntoNombre: z.string().max(200).nullable(),
@@ -60,7 +62,8 @@ export async function registrarEvidencia(
     {
       inspection_id: d.inspeccionId,
       company_account_id: sesion.companyAccountId,
-      kind: "photo" as const,
+      kind: d.tipo === "video" ? ("video" as const) : ("photo" as const),
+      duration_seconds: d.duracionSegundos ?? null,
       phase: d.paso,
       point_key: d.puntoClave,
       point_label: d.puntoNombre,

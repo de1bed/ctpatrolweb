@@ -2,6 +2,7 @@ import { ArrowLeft, FileText, PauseCircle, Play } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ControlesPausa } from "@/components/inspection/pause-controls";
 import { PhaseList } from "@/components/inspection/phase-list";
 import { ProgressBar } from "@/components/inspection/progress-bar";
 import { StatusBadge } from "@/components/inspection/status-badge";
@@ -97,6 +98,15 @@ export default async function InspeccionPage({
             </div>
           </dl>
         </Card>
+
+        {!cerrada && (
+          <ControlesPausa
+            inspeccionId={inspeccion.id}
+            estado={inspeccion.status}
+            puedePausar={flujo.puedePausar}
+            criticosPendientes={flujo.criticosPendientes.length}
+          />
+        )}
 
         {/* ── Aviso de secciones críticas ──────────────────────────────── */}
         {!flujo.navegacionLibre && !cerrada && (

@@ -136,7 +136,13 @@ export default async function PasoPage({
       return <FasePausa {...base} />;
 
     case "sellos":
-      return <FaseSellos {...base} />;
+      return (
+        <FaseSellos
+          {...base}
+          latitud={inspeccion.latitude}
+          longitud={inspeccion.longitude}
+        />
+      );
 
     case "firmas":
       return <FaseFirmas {...base} />;
@@ -166,15 +172,31 @@ export default async function PasoPage({
     // ── Fases de inspección visual ────────────────────────────────────────
     case "tractor-visual":
     case "inspeccion-interna":
-    case "inspeccion-externa":
+    case "inspeccion-externa": {
+      // Evidencia ya subida de este paso. Se necesita para poder analizarla
+      // con IA: el servidor lee la foto de Storage, y mientras solo exista en
+      // el dispositivo no hay nada que leer.
+      const { data: media } = await supabase
+        .from("inspection_media")
+        .select("id, point_key, ai_analysis")
+        .eq("inspection_id", id)
+        .eq("phase", clavePaso);
+
+      const evidencia: Record<string, { id: string; analisis: unknown }> = {};
+      for (const m of media ?? []) {
+        if (m.point_key) evidencia[m.point_key] = { id: m.id, analisis: m.ai_analysis };
+      }
+
       return (
         <FaseVisual
           {...base}
           grupo={paso.fase.puntos as GrupoPuntos}
           latitud={inspeccion.latitude}
           longitud={inspeccion.longitude}
+          evidenciaSubida={evidencia}
         />
       );
+    }
 
     // ── Revisión: necesita el resumen de todo lo demás ────────────────────
     case "revision": {

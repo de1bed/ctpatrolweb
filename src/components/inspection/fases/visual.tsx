@@ -3,6 +3,7 @@
 import { BookOpen, Camera, Check, RotateCcw, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { AnalisisIA } from "@/components/inspection/ai-analysis";
 import { CamaraPantallaCompleta } from "@/components/inspection/camera";
 import { GuideSheet } from "@/components/inspection/guide-sheet";
 import { PantallaFase } from "@/components/inspection/phase-shell";
@@ -17,6 +18,7 @@ import {
 import { guiaDe } from "@/lib/inspection/guias";
 import { borrarFoto, fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
 import type { FotoCapturada } from "@/lib/media/camara";
+import type { Analisis } from "@/lib/ai/vision";
 
 import { previo, type PropsFase } from "./tipos";
 
@@ -55,7 +57,13 @@ const BOTONES: { valor: Calificacion; etiqueta: string; clases: string }[] = [
  * ya está a salvo en el dispositivo.
  */
 export function FaseVisual(
-  props: PropsFase & { grupo: GrupoPuntos; latitud: number | null; longitud: number | null }
+  props: PropsFase & {
+    grupo: GrupoPuntos;
+    latitud: number | null;
+    longitud: number | null;
+    /** Evidencia ya subida, indexada por punto. Habilita el análisis con IA. */
+    evidenciaSubida?: Record<string, { id: string; analisis: unknown }>;
+  }
 ) {
   const puntos = PUNTOS_POR_GRUPO[props.grupo];
 
@@ -320,6 +328,20 @@ export function FaseVisual(
                       >
                         {estado.noAplica ? "Sí aplica" : "No aplica"}
                       </button>
+
+                      {/* Análisis con IA: solo tiene sentido si hay foto y no
+                          se marcó como "no aplica". */}
+                      {!estado.noAplica && foto && (
+                        <AnalisisIA
+                          inspeccionId={props.inspeccionId}
+                          mediaId={props.evidenciaSubida?.[punto.clave]?.id ?? null}
+                          analisisPrevio={
+                            (props.evidenciaSubida?.[punto.clave]?.analisis as
+                              | Analisis
+                              | null) ?? null
+                          }
+                        />
+                      )}
                     </div>
                   </div>
 

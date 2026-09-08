@@ -127,6 +127,13 @@
   gap: 6pt;
 }
 .reporte__foto figure { margin: 0; }
+.reporte__foto video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--linea);
+  display: block;
+  background: #000;
+}
 .reporte__foto img {
   width: 100%;
   aspect-ratio: 4 / 3;

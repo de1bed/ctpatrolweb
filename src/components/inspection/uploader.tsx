@@ -11,6 +11,7 @@ import {
   pendientesDeSubida,
   type FotoLocal,
 } from "@/lib/media/almacen";
+import { extensionDe } from "@/lib/media/video";
 import { createClient } from "@/lib/supabase/client";
 
 /** Tope de reintentos antes de dejar de insistir sola. */
@@ -200,7 +201,10 @@ async function subirUna(
   foto: FotoLocal,
   companyAccountId: string
 ): Promise<boolean> {
-  const ruta = `${companyAccountId}/${foto.inspeccionId}/${segmentoSeguro(foto.paso)}/${foto.clientId}.jpg`;
+  // La extensión sale del tipo real: un video guardado como .jpg confunde a
+  // cualquier cosa que lo lea después, empezando por el propio navegador.
+  const extension = foto.tipo === "video" ? extensionDe(foto.mimeType) : "jpg";
+  const ruta = `${companyAccountId}/${foto.inspeccionId}/${segmentoSeguro(foto.paso)}/${foto.clientId}.${extension}`;
 
   try {
     await actualizarEstado(foto.clientId, { estado: "subiendo" });
@@ -219,6 +223,8 @@ async function subirUna(
     const registro = await registrarEvidencia({
       inspeccionId: foto.inspeccionId,
       clientId: foto.clientId,
+      tipo: foto.tipo,
+      duracionSegundos: foto.duracionSegundos ?? null,
       paso: foto.paso,
       puntoClave: foto.puntoClave,
       puntoNombre: foto.puntoNombre,
