@@ -63,9 +63,27 @@ export type Flujo = {
   puedePausar: boolean;
 };
 
+/**
+ * Separador entre la fase y el número de unidad.
+ *
+ * Es "~" y NO "#" por una razón concreta: la clave viaja en la URL de la
+ * pantalla (/inspeccion/<id>/<clave>), y "#" es el separador de fragmento.
+ * El navegador cortaría ahí y el servidor recibiría "sellos" en vez de
+ * "sellos#2", que no es una clave válida y rebota al índice — o sea, las
+ * fases por unidad serían inalcanzables.
+ *
+ * "~" es un carácter no reservado en URLs: viaja tal cual, sin escapar.
+ */
+const SEPARADOR_UNIDAD = "~";
+
 /** Clave estable de un paso. Se persiste, así que su formato no debe cambiar. */
 export function clavePaso(faseId: FaseId, unidad: number | null): string {
-  return unidad === null ? faseId : `${faseId}#${unidad}`;
+  return unidad === null ? faseId : `${faseId}${SEPARADOR_UNIDAD}${unidad}`;
+}
+
+/** Extrae el id de fase de una clave de paso. */
+export function faseIdDeClave(clave: string): FaseId {
+  return clave.split(SEPARADOR_UNIDAD)[0] as FaseId;
 }
 
 function tituloPaso(fase: DefinicionFase, unidad: number | null, totalUnidades: number) {
@@ -179,6 +197,5 @@ export function agruparPasos(flujo: Flujo) {
 }
 
 export function faseDe(clave: string): DefinicionFase | undefined {
-  const [faseId] = clave.split("#");
-  return FASES_POR_ID.get(faseId as FaseId);
+  return FASES_POR_ID.get(faseIdDeClave(clave));
 }

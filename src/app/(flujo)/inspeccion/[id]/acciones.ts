@@ -5,8 +5,8 @@ import { z } from "zod";
 
 import { requerirSesion } from "@/lib/auth";
 import { ESQUEMAS, PROYECCIONES } from "@/lib/inspection/esquemas";
-import { FASES_POR_ID, type FaseId } from "@/lib/inspection/fases";
-import { construirFlujo, puedeAbrir } from "@/lib/inspection/flujo";
+import { FASES_POR_ID } from "@/lib/inspection/fases";
+import { construirFlujo, faseIdDeClave, puedeAbrir } from "@/lib/inspection/flujo";
 import { leerProgreso, marcarCompletado } from "@/lib/inspection/progreso";
 import { calcularResultado } from "@/lib/inspection/resultado";
 import { createClient } from "@/lib/supabase/server";
@@ -40,8 +40,8 @@ export async function guardarFase(
   const sesion = await requerirSesion();
   const supabase = await createClient();
 
-  const [faseId] = clavePaso.split("#");
-  const fase = FASES_POR_ID.get(faseId as FaseId);
+  const faseId = faseIdDeClave(clavePaso);
+  const fase = FASES_POR_ID.get(faseId);
   if (!fase) return { ok: false, error: "Esa fase no existe." };
 
   // ── Estado actual ─────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ export async function guardarFase(
   }
 
   // ── Validación de los datos ───────────────────────────────────────────────
-  const esquema = ESQUEMAS[faseId as FaseId] as z.ZodTypeAny;
+  const esquema = ESQUEMAS[faseId] as z.ZodTypeAny;
   const validado = esquema.safeParse(datosCrudos ?? {});
 
   if (!validado.success) {
@@ -115,7 +115,7 @@ export async function guardarFase(
   // "sellos#1" y "sellos#2" son capturas distintas.
   const nuevaData = { ...dataActual, [clavePaso]: datos as Json };
 
-  const proyeccion = PROYECCIONES[faseId as FaseId];
+  const proyeccion = PROYECCIONES[faseId];
   const columnas = proyeccion ? proyeccion(datos) : {};
 
   const nuevoProgreso = marcarCompletado(progreso, clavePaso);

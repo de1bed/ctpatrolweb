@@ -55,21 +55,21 @@ describe("construirFlujo · fases condicionales", () => {
   it("un contenedor lleva tamaño, interna, placas y externa", () => {
     const c = claves(base({ tipoTransporte: "contenedor" }));
     assert.ok(c.includes("tamano"));
-    assert.ok(c.includes("inspeccion-interna#1"));
-    assert.ok(c.includes("placas-remolque#1"));
-    assert.ok(c.includes("inspeccion-externa#1"));
+    assert.ok(c.includes("inspeccion-interna~1"));
+    assert.ok(c.includes("placas-remolque~1"));
+    assert.ok(c.includes("inspeccion-externa~1"));
   });
 
   it("una van lleva interna pero no externa ni tamaño", () => {
     const c = claves(base({ tipoTransporte: "van" }));
-    assert.ok(c.includes("inspeccion-interna#1"), "debe inspeccionarse por dentro");
+    assert.ok(c.includes("inspeccion-interna~1"), "debe inspeccionarse por dentro");
     assert.ok(!c.some((k) => k.startsWith("inspeccion-externa")), "no hay remolque");
     assert.ok(!c.includes("tamano"), "no maneja medida estándar");
   });
 
   it("una plataforma lleva externa pero no interna", () => {
     const c = claves(base({ tipoTransporte: "plataforma" }));
-    assert.ok(c.includes("inspeccion-externa#1"));
+    assert.ok(c.includes("inspeccion-externa~1"));
     assert.ok(!c.some((k) => k.startsWith("inspeccion-interna")));
   });
 
@@ -149,7 +149,7 @@ describe("construirFlujo · avance", () => {
     // Caso real: el inspector marca la externa, luego corrige el tipo de
     // transporte a "van", que no la lleva. Ese avance no debe seguir contando.
     const flujo = construirFlujo(
-      base({ tipoTransporte: "van", completados: ["inspeccion-externa#1", "cliente"] })
+      base({ tipoTransporte: "van", completados: ["inspeccion-externa~1", "cliente"] })
     );
     assert.equal(flujo.completados, 1, "solo 'cliente' sigue siendo válido");
   });
@@ -205,7 +205,7 @@ describe("puedeAbrir", () => {
 
   it("rechaza una clave que no existe en este flujo", () => {
     const flujo = construirFlujo(base({ tipoTransporte: "van" }));
-    assert.equal(puedeAbrir(flujo, "inspeccion-externa#1"), false);
+    assert.equal(puedeAbrir(flujo, "inspeccion-externa~1"), false);
     assert.equal(puedeAbrir(flujo, "inventada"), false);
   });
 });
@@ -256,6 +256,30 @@ describe("integridad del catálogo", () => {
 
   it("clavePaso genera claves estables", () => {
     assert.equal(clavePaso("sellos", null), "sellos");
-    assert.equal(clavePaso("sellos", 2), "sellos#2");
+    assert.equal(clavePaso("sellos", 2), "sellos~2");
+  });
+
+  it("toda clave de paso es segura para una URL", () => {
+    // Regresión: el separador era "#", que en una URL corta el fragmento.
+    // /inspeccion/<id>/sellos#2 llegaba al servidor como "sellos", que no es
+    // una clave válida — las fases por unidad eran inalcanzables.
+    //
+    // Se comprueba que la clave sobreviva intacta a un viaje por la URL.
+    for (const tipo of TIPOS_TRANSPORTE) {
+      for (const esFull of [false, true]) {
+        for (const paso of construirFlujo(base({ tipoTransporte: tipo, esFull })).pasos) {
+          const url = new URL(`https://x/inspeccion/abc/${paso.clave}`);
+          const recibido = decodeURIComponent(url.pathname.split("/").pop()!);
+
+          assert.equal(
+            recibido,
+            paso.clave,
+            `la clave "${paso.clave}" no sobrevive a la URL (llega como "${recibido}")`
+          );
+          assert.equal(url.hash, "", `la clave "${paso.clave}" genera un fragmento`);
+          assert.equal(url.search, "", `la clave "${paso.clave}" genera un query`);
+        }
+      }
+    }
   });
 });
