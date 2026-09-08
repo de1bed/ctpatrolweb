@@ -69,3 +69,35 @@ begin
   raise notice '✅ RLS: todas las aserciones pasaron';
 end;
 $test$;
+
+-- ============================================================================
+-- Regresión · Modo de almacenamiento del catálogo
+--
+-- Bug encontrado el 2026-09-08: el trigger asumía que siempre hay usuario
+-- autenticado y marcaba como EFÍMERO todo lo insertado desde el servidor.
+-- Como el buscador excluye los efímeros, esos registros quedaban invisibles
+-- en la app aunque existieran en la base. Ver migración 0006.
+-- ============================================================================
+
+do $test$
+declare
+  v_cuenta uuid;
+  v_efimero boolean;
+begin
+  select id into v_cuenta from company_accounts where code = 'DEMO';
+
+  -- Contexto de sistema (sin auth.uid()): debe quedar PERMANENTE.
+  insert into customers (company_account_id, name)
+  values (v_cuenta, 'Prueba Contexto Sistema')
+  returning is_ephemeral into v_efimero;
+
+  if v_efimero then
+    raise exception 'FALLA: una inserción de sistema quedó marcada como efímera';
+  end if;
+
+  delete from customers where company_account_id = v_cuenta
+    and name = 'Prueba Contexto Sistema';
+
+  raise notice '✅ Catálogo: el contexto de sistema crea registros permanentes';
+end;
+$test$;
