@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, PauseCircle, Play } from "lucide-react";
+import { ArrowLeft, FileText, Images, PauseCircle, Play } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -149,6 +149,25 @@ export default async function InspeccionPage({
             </Card>
           </Link>
         )}
+
+        {/* Acceso a la galería. Aparece siempre: revisar la evidencia es útil
+            tanto a media captura como en un expediente ya cerrado. */}
+        <Link href={`/inspeccion/${inspeccion.id}/evidencia`} className="mt-4 block">
+          <Card
+            interactive
+            className="flex items-center gap-3 p-4 hover:border-line-strong"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-surface-sunken">
+              <Images className="size-5 text-ink-secondary" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-ink">Ver evidencia</span>
+              <span className="block text-sm text-ink-secondary">
+                Todas las fotos y clips de esta inspección
+              </span>
+            </span>
+          </Card>
+        </Link>
 
         <div className="mt-7">
           <PhaseList flujo={flujo} inspeccionId={inspeccion.id} />
