@@ -22,6 +22,23 @@ Y abrir **http://localhost:3100**
 > IPv6, `localhost:3000` cae en la app equivocada sin dar ningún error —
 > simplemente aparece otra cosa. Fijar el puerto evita esa confusión.
 
+### Probarla en el teléfono (cámara y GPS)
+
+```bash
+npm run dev:https
+```
+
+Y desde el teléfono, **en la misma red**: `https://192.168.100.10:3443`
+
+> **La cámara y el GPS NO funcionan sin HTTPS.** Los navegadores solo los
+> permiten en un origen seguro, y `localhost` es la única excepción. Por eso
+> hay un servidor aparte con certificado local: sin él, probar la captura en
+> un teléfono es imposible.
+>
+> El certificado es autofirmado, así que el teléfono va a mostrar una
+> advertencia la primera vez. Acéptala ("Avanzado" → "Continuar"): a partir
+> de ahí el navegador trata el sitio como seguro y la cámara funciona.
+
 ### Entrar
 
 Usuarios de prueba de la cuenta DEMO:

@@ -42,3 +42,5 @@ next-env.d.ts
 
 # El ejemplo si se versiona: documenta que variables existen.
 !.env.example
+
+certificates
