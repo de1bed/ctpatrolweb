@@ -1,9 +1,10 @@
 "use client";
 
-import { Camera, Check, RotateCcw, TriangleAlert } from "lucide-react";
+import { BookOpen, Camera, Check, RotateCcw, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { CamaraPantallaCompleta } from "@/components/inspection/camera";
+import { GuideSheet } from "@/components/inspection/guide-sheet";
 import { PantallaFase } from "@/components/inspection/phase-shell";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/field";
@@ -13,6 +14,7 @@ import {
   type Calificacion,
   type GrupoPuntos,
 } from "@/lib/inspection/puntos";
+import { guiaDe } from "@/lib/inspection/guias";
 import { borrarFoto, fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
 import type { FotoCapturada } from "@/lib/media/camara";
 
@@ -72,6 +74,7 @@ export function FaseVisual(
 
   const [fotos, setFotos] = useState<Record<string, FotoLocal>>({});
   const [capturando, setCapturando] = useState<string | null>(null);
+  const [guiaAbierta, setGuiaAbierta] = useState<string | null>(null);
 
   // ── Fotos ya guardadas de este paso ─────────────────────────────────────
   useEffect(() => {
@@ -267,6 +270,20 @@ export function FaseVisual(
                         {punto.pista}
                       </p>
 
+                      {/* Acceso a la guía. Va junto a la pista y no escondido
+                          en un menú: es lo que consulta un inspector nuevo, y
+                          esconderlo equivale a no tenerlo. */}
+                      {guiaDe(punto.clave) && (
+                        <button
+                          type="button"
+                          onClick={() => setGuiaAbierta(punto.clave)}
+                          className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-brand-600"
+                        >
+                          <BookOpen className="size-4 shrink-0" aria-hidden />
+                          Ver guía
+                        </button>
+                      )}
+
                       {/* Calificación */}
                       {!estado.noAplica && (
                         <div className="mt-2.5 flex gap-1.5">
@@ -336,6 +353,14 @@ export function FaseVisual(
           })}
         </ul>
       </PantallaFase>
+
+      {guiaAbierta && guiaDe(guiaAbierta) && (
+        <GuideSheet
+          nombre={puntos.find((p) => p.clave === guiaAbierta)?.nombre ?? ""}
+          guia={guiaDe(guiaAbierta)!}
+          onCerrar={() => setGuiaAbierta(null)}
+        />
+      )}
 
       {puntoActivo && (
         <CamaraPantallaCompleta
