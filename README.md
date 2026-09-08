@@ -36,6 +36,22 @@ dan de alta desde el panel administrativo.
 
 ---
 
+## Qué funciona hoy
+
+**Flujo operativo completo**, de crear la inspección a imprimir el reporte:
+
+- Flujo guiado de 20 fases con lógica condicional por tipo de transporte
+- Cámara con fecha, hora y coordenadas **quemadas en la imagen**
+- Evidencia guardada en el dispositivo antes de subirse, con cola de
+  sincronización que reintenta sola
+- Catálogos con búsqueda y alta en campo, controlada por permisos
+- Firmas, cierre automático con resultado calculado, y reporte imprimible
+
+**Pendiente:** panel administrativo (siguiente entrega) y el análisis con IA,
+que está construido pero requiere `OPENAI_API_KEY`.
+
+---
+
 ## Cómo está armado
 
 | Capa      | Qué se usó                                              |
@@ -87,6 +103,14 @@ está en `supabase/migrations/`, no existe.
 **El folio de inspección lo genera Postgres**, no el cliente. Generarlo en el
 dispositivo fue lo que producía folios duplicados en el sistema anterior.
 
+**La foto se guarda en el dispositivo antes de intentar subirla.** IndexedDB
+primero, red después. Es lo que hace que un corte de señal, una recarga o una
+batería agotada no borren evidencia ya capturada.
+
+**Las claves de paso viajan en la URL**, así que no pueden llevar caracteres
+reservados. Y las rutas de Storage no aceptan los mismos caracteres que una
+URL: hay un sanitizador entre ambas. Ver `flujo.ts` y `uploader.tsx`.
+
 ---
 
 ## Comandos
@@ -95,6 +119,7 @@ dispositivo fue lo que producía folios duplicados en el sistema anterior.
 | ------------------ | ----------------------------------------- |
 | `npm run dev`      | Servidor de desarrollo en el puerto 3100  |
 | `npm run build`    | Build de producción                       |
+| `npm test`         | Pruebas del motor de flujo                |
 | `npm run typecheck`| Revisa tipos sin compilar                 |
 | `npm run lint`     | ESLint                                    |
 | `npm run icons`    | Regenera los íconos desde `brand/`        |

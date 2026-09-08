@@ -3,7 +3,6 @@ import {
   FolderOpen,
   Home,
   Settings,
-  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,7 +28,9 @@ export const NAV_OPERATIVO: ItemNav[] = [
   { href: "/", etiqueta: "Inicio", icono: Home },
   { href: "/inspecciones", etiqueta: "Inspecciones", icono: ClipboardList },
   { href: "/expedientes", etiqueta: "Expedientes", icono: FolderOpen },
-  { href: "/admin", etiqueta: "Admin", icono: ShieldCheck, soloAdmin: true },
+  // El panel administrativo es la siguiente entrega. La pestaña se agrega
+  // cuando exista la pantalla: un enlace que lleva a un 404 es peor que no
+  // tener el enlace.
 ];
 
 export const NAV_AJUSTES: ItemNav = {
