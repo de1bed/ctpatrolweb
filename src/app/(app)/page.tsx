@@ -38,7 +38,7 @@ export default async function InicioPage() {
       />
 
       {/* pb-24 reserva el alto de la barra de pestañas; en lg ya no existe. */}
-      <main className="mx-auto max-w-5xl px-4 pb-24 pt-5 px-safe lg:pb-10">
+      <main className="mx-auto max-w-5xl px-gutter pb-24 pt-5 lg:pb-10">
         {/* ── Acción principal ────────────────────────────────────────────
             Ocupa el ancho completo y va arriba de todo: en el 90% de las
             veces que se abre la app es para esto.                        */}

@@ -21,17 +21,11 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     orientation: "portrait",
     background_color: "#ffffff",
-    theme_color: "#1e40af",
+    theme_color: "#0c77bd",
     lang: "es-MX",
     dir: "ltr",
     categories: ["business", "productivity", "utilities"],
     icons: [
-      {
-        src: "/icons/icon.svg",
-        sizes: "any",
-        type: "image/svg+xml",
-        purpose: "any",
-      },
       {
         src: "/icons/icon-192.png",
         sizes: "192x192",

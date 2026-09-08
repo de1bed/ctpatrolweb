@@ -16,19 +16,24 @@
 
 @theme {
   /* ── Marca ──────────────────────────────────────────────────────────────
-     Azul profundo, heredado de la app anterior para no romper el
-     reconocimiento de la herramienta entre los inspectores.            */
-  --color-brand-50:  #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-200: #bfdbfe;
-  --color-brand-300: #93c5fd;
-  --color-brand-400: #60a5fa;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
-  --color-brand-800: #1e40af;
-  --color-brand-900: #1e3a8a;
-  --color-brand-950: #172554;
+     El tono 600 es el azul exacto del logo de CTPatrol, muestreado del
+     archivo original (brand/logo-fuente.png). El resto de la escala se
+     construyó alrededor de él conservando el matiz (203°).
+
+     brand-600 sobre blanco da 4.78:1 de contraste, así que el texto blanco
+     encima de un botón sólido cumple AA. No bajar de este tono para fondos
+     con texto blanco: brand-500 se queda en 3.5:1 y ya no pasa.          */
+  --color-brand-50:  #f0f9fe;
+  --color-brand-100: #ddf1fd;
+  --color-brand-200: #b4def9;
+  --color-brand-300: #7dc5f2;
+  --color-brand-400: #3ea8ea;
+  --color-brand-500: #138fdd;
+  --color-brand-600: #0c77bd; /* ← azul oficial del logo */
+  --color-brand-700: #09639a;
+  --color-brand-800: #09507b;
+  --color-brand-900: #0b4060;
+  --color-brand-950: #082a40;
 
   /* ── Semánticos ─────────────────────────────────────────────────────────
      Nunca se usan solos para comunicar: siempre acompañados de ícono y
@@ -254,6 +259,19 @@ textarea {
 @utility px-safe {
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Margen lateral del contenido, SUMANDO el área segura.
+ *
+ * OJO: no combinar `px-4` con `px-safe` en el mismo elemento. Son la misma
+ * propiedad CSS, así que no se suman — una pisa a la otra, y como el área
+ * segura vale 0 en escritorio, el resultado es contenido pegado al borde.
+ * Ese es justo el bug que esta utilidad viene a evitar: aquí el margen de
+ * diseño y el del notch se suman de verdad.
+ */
+@utility px-gutter {
+  padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+  padding-right: calc(1rem + env(safe-area-inset-right, 0px));
 }
 
 /* Alto real de la ventana. En móvil 100vh incluye la barra del navegador

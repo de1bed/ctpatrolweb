@@ -24,7 +24,7 @@ export default async function LoginPage({
       <div className="mx-auto w-full max-w-sm px-6 py-10 sm:max-w-md sm:rounded-3xl sm:border sm:border-line sm:bg-surface sm:px-8 sm:py-10 sm:shadow-[var(--shadow-card)]">
         <div className="mb-8 flex flex-col items-center text-center">
           <Image
-            src="/icons/icon.svg"
+            src="/icons/icon-256.png"
             alt=""
             width={64}
             height={64}

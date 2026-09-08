@@ -54,8 +54,10 @@ export function AppHeader({
   }, [abierto]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-surface/85 pt-safe px-safe backdrop-blur-xl">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4">
+    <header className="sticky top-0 z-30 border-b border-line bg-surface/85 pt-safe backdrop-blur-xl">
+      {/* px-gutter (no px-safe aquí) para que el título quede alineado con el
+          contenido de la página, incluso en horizontal con notch a un lado. */}
+      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-gutter">
         <div className="min-w-0">
           <h1 className="truncate text-lg font-bold leading-tight tracking-tight text-ink">
             {titulo}

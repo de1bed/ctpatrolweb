@@ -28,7 +28,7 @@ export function SideRail({ esAdmin }: { esAdmin: boolean }) {
     >
       <div className="flex items-center gap-3 px-6 py-6">
         <Image
-          src="/icons/icon.svg"
+          src="/icons/icon-256.png"
           alt=""
           width={36}
           height={36}
