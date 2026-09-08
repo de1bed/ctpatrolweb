@@ -1,36 +1,110 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CTPatrol
 
-## Getting Started
+Inspecciones de seguridad C-TPAT: flujo guiado, evidencia fotográfica
+georreferenciada, análisis con IA y expedientes.
 
-First, run the development server:
+Web app mobile-first (PWA instalable) con dos perfiles sobre el mismo login:
+**operativo** (el inspector, en el teléfono) y **administrativo** (el panel).
+
+---
+
+## Cómo correrla
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Y abrir **http://localhost:3100**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> **El puerto es 3100, no 3000.** Está fijo en `package.json` a propósito:
+> en esta máquina hay otro proyecto ocupando el 3000, y como ese escucha en
+> IPv6, `localhost:3000` cae en la app equivocada sin dar ningún error —
+> simplemente aparece otra cosa. Fijar el puerto evita esa confusión.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Entrar
 
-## Learn More
+Usuarios de prueba de la cuenta DEMO:
 
-To learn more about Next.js, take a look at the following resources:
+| Correo               | Rol       | Contraseña          |
+| -------------------- | --------- | ------------------- |
+| `inspector@demo.mx`  | Inspector | `CtpatrolDemo2026!` |
+| `admin@demo.mx`      | Admin     | `CtpatrolDemo2026!` |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Son credenciales de desarrollo sobre datos de juguete. Los usuarios reales se
+dan de alta desde el panel administrativo.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Cómo está armado
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Capa      | Qué se usó                                              |
+| --------- | ------------------------------------------------------- |
+| Framework | Next.js 16 (App Router) + TypeScript                    |
+| Estilos   | Tailwind 4, sistema de diseño propio en `globals.css`   |
+| Backend   | Supabase — Postgres, Auth, Storage, RLS                 |
+| IA        | OpenAI, **solo desde el servidor** (`/api`)             |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Estructura
+
+```
+src/
+  app/
+    (app)/          Perfil operativo: flujo de inspección
+    login/          Autenticación
+  components/
+    shell/          Armazón: encabezado, pestañas, riel lateral
+    ui/             Primitivos: botón, campo, tarjeta
+    inspection/     Piezas del dominio
+  lib/
+    auth.ts         Sesión, roles y permisos (solo servidor)
+    env.ts          Variables de entorno validadas
+    supabase/       Clientes de navegador, servidor y admin
+supabase/
+  migrations/       Schema versionado — la fuente de verdad
+  seed.sql          Datos de desarrollo
+  tests/rls.sql     Prueba de aislamiento entre empresas
+brand/
+  logo-fuente.png   Logo original; `npm run icons` regenera todo
+```
+
+---
+
+## Reglas que no se rompen
+
+**Ninguna llave secreta lleva `NEXT_PUBLIC_`.** Ese prefijo la compila dentro
+del JavaScript que baja al navegador, donde cualquiera la lee. Las llaves de
+OpenAI y el service role viven solo en el servidor. (En el sistema anterior
+las cuatro llaves de API estaban expuestas así.)
+
+**RLS es lo único que separa a una empresa de otra.** No se filtra por cuenta
+en el cliente. Después de tocar cualquier política, correr
+`supabase/tests/rls.sql`.
+
+**El schema se cambia con migraciones**, nunca a mano en el dashboard. Si no
+está en `supabase/migrations/`, no existe.
+
+**El folio de inspección lo genera Postgres**, no el cliente. Generarlo en el
+dispositivo fue lo que producía folios duplicados en el sistema anterior.
+
+---
+
+## Comandos
+
+| Comando            | Qué hace                                  |
+| ------------------ | ----------------------------------------- |
+| `npm run dev`      | Servidor de desarrollo en el puerto 3100  |
+| `npm run build`    | Build de producción                       |
+| `npm run typecheck`| Revisa tipos sin compilar                 |
+| `npm run lint`     | ESLint                                    |
+| `npm run icons`    | Regenera los íconos desde `brand/`        |
+
+---
+
+## Configuración
+
+Copiar `.env.example` a `.env.local` y llenar. Las de Supabase ya vienen
+puestas; faltan dos:
+
+- `SUPABASE_SERVICE_ROLE_KEY` — panel de Supabase → Project Settings → API Keys
+- `OPENAI_API_KEY` — para el análisis de evidencia
