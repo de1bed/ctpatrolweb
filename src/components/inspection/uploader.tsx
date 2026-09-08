@@ -172,6 +172,23 @@ export function Uploader({ companyAccountId }: { companyAccountId: string }) {
 }
 
 /**
+ * Convierte una clave de paso en un segmento de ruta válido para Storage.
+ *
+ * Supabase Storage RECHAZA "~" en las llaves de objeto ("Invalid key"), y las
+ * claves de paso por unidad lo usan como separador (inspeccion-externa~1).
+ * Sin esta conversión, todas las fases por unidad fallaban al subir — se
+ * quedaban en el dispositivo, reintentando contra un error que nunca se iba
+ * a resolver solo.
+ *
+ * La ruta NO tiene que coincidir con la clave: es solo dónde vive el archivo.
+ * La clave real se conserva en la columna `phase` de inspection_media, que es
+ * lo que liga la evidencia con su paso.
+ */
+function segmentoSeguro(paso: string): string {
+  return paso.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+/**
  * Sube una foto y registra su fila.
  *
  * El orden importa: primero el archivo, después la fila. Al revés quedaría
@@ -183,7 +200,7 @@ async function subirUna(
   foto: FotoLocal,
   companyAccountId: string
 ): Promise<boolean> {
-  const ruta = `${companyAccountId}/${foto.inspeccionId}/${foto.paso}/${foto.clientId}.jpg`;
+  const ruta = `${companyAccountId}/${foto.inspeccionId}/${segmentoSeguro(foto.paso)}/${foto.clientId}.jpg`;
 
   try {
     await actualizarEstado(foto.clientId, { estado: "subiendo" });

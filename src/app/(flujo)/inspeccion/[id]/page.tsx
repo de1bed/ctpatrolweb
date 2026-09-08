@@ -1,4 +1,4 @@
-import { ArrowLeft, PauseCircle, Play } from "lucide-react";
+import { ArrowLeft, FileText, PauseCircle, Play } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -117,6 +117,27 @@ export default async function InspeccionPage({
               </p>
             </div>
           </Card>
+        )}
+
+        {/* Con la inspección cerrada, el reporte es lo que la gente viene a
+            buscar: va arriba de la lista de fases, no al final. */}
+        {cerrada && (
+          <Link href={`/inspeccion/${inspeccion.id}/reporte`} className="mt-4 block">
+            <Card
+              interactive
+              className="flex items-center gap-3 p-4 hover:border-line-strong"
+            >
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 dark:bg-brand-950">
+                <FileText className="size-5 text-brand-600" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-ink">Ver reporte</span>
+                <span className="block text-sm text-ink-secondary">
+                  Expediente completo, listo para imprimir o guardar en PDF
+                </span>
+              </span>
+            </Card>
+          </Link>
         )}
 
         <div className="mt-7">
