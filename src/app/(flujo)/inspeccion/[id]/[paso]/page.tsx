@@ -35,6 +35,8 @@ import type { GrupoPuntos } from "@/lib/inspection/puntos";
 
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Pantalla de una fase.
  *
@@ -182,28 +184,57 @@ export default async function PasoPage({
       // el dispositivo no hay nada que leer.
       const { data: media } = await supabase
         .from("inspection_media")
-        .select("id, point_key, ai_analysis")
+        .select("id, point_key, ai_analysis, storage_path")
         .eq("inspection_id", id)
         .eq("phase", clavePaso);
 
-      const evidencia: Record<string, { id: string; analisis: unknown }> = {};
+      const rutas = (media ?? [])
+        .map((m) => m.storage_path)
+        .filter((p): p is string => Boolean(p));
+      const { data: firmados } = rutas.length
+        ? await supabase.storage
+            .from("inspection-media")
+            .createSignedUrls(rutas, 60 * 60)
+        : { data: [] };
+      const urlPorRuta = new Map<string, string>();
+      for (const f of firmados ?? []) {
+        if (f.path && f.signedUrl) urlPorRuta.set(f.path, f.signedUrl);
+      }
+
+      const evidencia: Record<
+        string,
+        { id: string; analisis: unknown; url: string | null }
+      > = {};
       for (const m of media ?? []) {
-        if (m.point_key) evidencia[m.point_key] = { id: m.id, analisis: m.ai_analysis };
+        if (!m.point_key) continue;
+        evidencia[m.point_key] = {
+          id: m.id,
+          analisis: m.ai_analysis,
+          url: m.storage_path ? (urlPorRuta.get(m.storage_path) ?? null) : null,
+        };
       }
 
       return (
         <FaseVisual
+          key={JSON.stringify(datosPrevios)}
           {...base}
           grupo={paso.fase.puntos as GrupoPuntos}
           latitud={inspeccion.latitude}
           longitud={inspeccion.longitude}
           evidenciaSubida={evidencia}
+          puedeRechazar={sesion.esAdmin}
         />
       );
     }
 
     // ── Revisión: necesita el resumen de todo lo demás ────────────────────
     case "revision": {
+      const { count } = await supabase
+        .from("inspection_media")
+        .select("id", { count: "exact", head: true })
+        .eq("inspection_id", id)
+        .not("storage_path", "is", null);
+
       const resumen: ResumenPaso[] = flujo.pasos
         .filter((p) => p.fase.id !== "revision")
         .map((p) => ({
@@ -213,7 +244,13 @@ export default async function PasoPage({
           hallazgos: contarHallazgos(datos[p.clave]),
         }));
 
-      return <FaseRevision {...base} resumen={resumen} />;
+      return (
+        <FaseRevision
+          {...base}
+          resumen={resumen}
+          fotosServidor={count ?? 0}
+        />
+      );
     }
   }
 }

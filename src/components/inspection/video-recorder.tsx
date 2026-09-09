@@ -34,6 +34,7 @@ export function GrabadoraVideo({
   onCerrar: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const archivoRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const grabacionRef = useRef<ControlGrabacion | null>(null);
 
@@ -122,10 +123,46 @@ export function GrabadoraVideo({
     setEstado("grabando");
   }
 
+  async function desdeArchivo(archivo: File) {
+    setError(null);
+    const duracion = await new Promise<number>((resolve) => {
+      const el = document.createElement("video");
+      el.preload = "metadata";
+      el.onloadedmetadata = () => {
+        const d = Number.isFinite(el.duration) ? el.duration : 0;
+        URL.revokeObjectURL(el.src);
+        resolve(d);
+      };
+      el.onerror = () => resolve(0);
+      el.src = URL.createObjectURL(archivo);
+    });
+    navigator.vibrate?.(40);
+    onCapturar(
+      {
+        blob: archivo,
+        mimeType: archivo.type || "video/mp4",
+        duracionSegundos: duracion,
+      },
+      new Date().toISOString()
+    );
+  }
+
   const suficiente = segundos >= DURACION_MINIMA;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
+      <input
+        ref={archivoRef}
+        type="file"
+        accept="video/*"
+        capture="environment"
+        className="sr-only"
+        onChange={(e) => {
+          const archivo = e.target.files?.[0];
+          e.target.value = "";
+          if (archivo) void desdeArchivo(archivo);
+        }}
+      />
       <div className="flex items-center gap-3 px-gutter pt-safe">
         <div className="flex min-h-14 flex-1 flex-col justify-center">
           <p className="truncate text-base font-semibold text-white">
@@ -146,7 +183,13 @@ export function GrabadoraVideo({
       </div>
 
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-        <video ref={videoRef} playsInline muted className="size-full object-contain" />
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="size-full object-contain"
+        />
 
         {estado === "abriendo" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
@@ -158,8 +201,11 @@ export function GrabadoraVideo({
         {estado === "error" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center text-white">
             <TriangleAlert className="size-10 text-warn-500" aria-hidden />
-            <p className="text-lg font-semibold">No se pudo abrir la cámara</p>
+            <p className="text-lg font-semibold">No se pudo abrir la cámara en vivo</p>
             <p className="text-white/80">{error}</p>
+            <p className="text-sm text-white/70">
+              Puedes grabar el clip con la cámara del teléfono.
+            </p>
           </div>
         )}
 
@@ -221,6 +267,16 @@ export function GrabadoraVideo({
             </button>
           )}
         </div>
+
+        {estado !== "grabando" && (
+          <button
+            type="button"
+            onClick={() => archivoRef.current?.click()}
+            className="pb-2 text-sm font-medium text-white/80 underline underline-offset-2"
+          >
+            Grabar con la cámara del teléfono
+          </button>
+        )}
       </div>
     </div>
   );

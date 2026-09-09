@@ -30,16 +30,17 @@ export type ResumenPaso = {
  * con lupa.
  */
 export function FaseRevision(
-  props: PropsFase & { resumen: ResumenPaso[] }
+  props: PropsFase & { resumen: ResumenPaso[]; fotosServidor?: number }
 ) {
-  const [fotos, setFotos] = useState<number | null>(null);
+  const [fotosLocales, setFotosLocales] = useState<number | null>(null);
 
   useEffect(() => {
-    fotosDeInspeccion(props.inspeccionId).then((f) => setFotos(f.length));
+    fotosDeInspeccion(props.inspeccionId).then((f) => setFotosLocales(f.length));
   }, [props.inspeccionId]);
 
   const pendientes = props.resumen.filter((r) => !r.completado);
   const totalHallazgos = props.resumen.reduce((n, r) => n + r.hallazgos, 0);
+  const fotos = Math.max(props.fotosServidor ?? 0, fotosLocales ?? 0);
 
   return (
     <PantallaFase
@@ -56,7 +57,7 @@ export function FaseRevision(
             Evidencia
           </p>
           <p className="mt-1 text-2xl font-bold text-ink">
-            {fotos === null ? "…" : fotos}
+            {fotosLocales === null && (props.fotosServidor ?? 0) === 0 ? "…" : fotos}
           </p>
           <p className="text-sm text-ink-secondary">
             {fotos === 1 ? "foto" : "fotos"}

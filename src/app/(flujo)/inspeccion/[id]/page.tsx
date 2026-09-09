@@ -13,6 +13,8 @@ import { leerProgreso } from "@/lib/inspection/progreso";
 import { capacidadesDe } from "@/lib/inspection/transporte";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 export default async function InspeccionPage({
   params,
 }: PageProps<"/inspeccion/[id]">) {

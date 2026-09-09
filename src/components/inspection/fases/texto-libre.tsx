@@ -1,7 +1,7 @@
 "use client";
 
-import { Plus, ScanLine, Thermometer, Trash2, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { ImageIcon, Plus, ScanLine, Thermometer, Trash2, TriangleAlert } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { PantallaFase } from "@/components/inspection/phase-shell";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { OptionCards } from "@/components/ui/option-cards";
 
-import { EscanerDocumentos } from "@/components/inspection/document-scanner";
+import { EscanerDocumentos, procesarImagenDocumento } from "@/components/inspection/document-scanner";
 import { cn } from "@/lib/cn";
 import type { Extraccion } from "@/lib/ai/ocr";
 
@@ -28,6 +28,9 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
   );
 
   const [escaneando, setEscaneando] = useState(false);
+  const [leyendoGaleria, setLeyendoGaleria] = useState(false);
+  const [errorGaleria, setErrorGaleria] = useState<string | null>(null);
+  const galeriaRef = useRef<HTMLInputElement>(null);
   // Campos que la IA leyó con duda. Se resaltan para que el inspector los
   // coteje contra el papel en vez de darlos por buenos.
   const [dudosos, setDudosos] = useState<string[]>([]);
@@ -43,6 +46,27 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
     if (datos.sellosFiscales && !sellos) setSellos(datos.sellosFiscales);
     setDudosos(datos.camposDudosos);
     setEscaneando(false);
+  }
+
+  async function aplicarDesdeGaleria(archivo: File) {
+    setLeyendoGaleria(true);
+    setErrorGaleria(null);
+    try {
+      const r = await procesarImagenDocumento(archivo);
+      if (!r.ok) {
+        setErrorGaleria(r.error);
+        return;
+      }
+      if (r.datos.problema) {
+        setErrorGaleria(r.datos.problema);
+        return;
+      }
+      aplicarExtraccion(r.datos);
+    } catch {
+      setErrorGaleria("No se pudo procesar la imagen.");
+    } finally {
+      setLeyendoGaleria(false);
+    }
   }
 
   const marcaDudoso = (campo: string) =>
@@ -68,15 +92,44 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
     >
       <div className="flex flex-col gap-5">
         {!bloqueado && (
-          <Button
-            variant="secondary"
-            block
-            onClick={() => setEscaneando(true)}
-            className="justify-start"
-          >
-            <ScanLine className="size-5" aria-hidden />
-            Escanear documento con la cámara
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              block
+              onClick={() => setEscaneando(true)}
+              className="justify-start"
+            >
+              <ScanLine className="size-5" aria-hidden />
+              Escanear documento
+            </Button>
+            <input
+              ref={galeriaRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                const archivo = e.target.files?.[0];
+                e.target.value = "";
+                if (archivo) void aplicarDesdeGaleria(archivo);
+              }}
+            />
+            <Button
+              variant="secondary"
+              block
+              loading={leyendoGaleria}
+              onClick={() => galeriaRef.current?.click()}
+              className="justify-start"
+            >
+              <ImageIcon className="size-5" aria-hidden />
+              Usar foto del teléfono
+            </Button>
+            {errorGaleria && (
+              <p role="alert" className="flex items-start gap-2 text-sm text-danger-600">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {errorGaleria}
+              </p>
+            )}
+          </div>
         )}
 
         {dudosos.length > 0 && (
@@ -89,23 +142,35 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
           </p>
         )}
 
-        <Field label="Factura">
+        <Field
+          label="Factura"
+          ayuda="Número de factura comercial o folio. Suele aparecer en la esquina superior, etiquetado como Factura, Invoice o Folio."
+        >
           {(p) => (
             <Input {...p} value={factura} disabled={bloqueado} className={cn(marcaDudoso("factura"))} onChange={(e) => setFactura(e.target.value)} />
           )}
         </Field>
 
-        <Field label="Bill of Lading">
+        <Field
+          label="Bill of Lading"
+          ayuda="Número del Bill of Lading, guía o carta porte. Busca las siglas B/L, BL o “Bill of Lading” en el encabezado del conocimiento de embarque."
+        >
           {(p) => <Input {...p} value={bl} disabled={bloqueado} className={cn(marcaDudoso("billOfLading"))} onChange={(e) => setBl(e.target.value)} />}
         </Field>
 
-        <Field label="Pedimento">
+        <Field
+          label="Pedimento"
+          ayuda="Número de pedimento aduanal mexicano. Son 15 dígitos, a menudo con espacios (ej. 24 43 3456 4001234), en el encabezado del pedimento."
+        >
           {(p) => (
             <Input {...p} value={pedimento} disabled={bloqueado} className={cn(marcaDudoso("pedimento"))} onChange={(e) => setPedimento(e.target.value)} />
           )}
         </Field>
 
-        <Field label="Sellos fiscales">
+        <Field
+          label="Sellos fiscales"
+          ayuda="Número del sello fiscal o candado oficial que cierra la unidad. Está impreso en el sello físico y suele repetirse en el pedimento o el BL."
+        >
           {(p) => (
             <Input {...p} value={sellos} disabled={bloqueado} className={cn(marcaDudoso("sellosFiscales"))} onChange={(e) => setSellos(e.target.value)} />
           )}

@@ -74,11 +74,7 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereTamano: true,
     requiereInspeccionInterna: true,
     requiereInspeccionExterna: true,
-    // DISCREPANCIA 1 (heredada): el sistema anterior pedía placas de remolque
-    // para "contenedor" y "caja" pero NO para caja refrigerada, aunque también
-    // las tiene. Se conserva el comportamiento viejo para no cambiar una regla
-    // de negocio por cuenta propia. Pendiente de confirmar con David.
-    requierePlacasRemolque: false,
+    requierePlacasRemolque: true,
     admiteFull: true,
     requiereTemperatura: true,
     unidadesDeCarga: 1,
@@ -102,15 +98,8 @@ export const CAPACIDADES: Record<TipoTransporte, CapacidadesTransporte> = {
     requiereTamano: false,
     // Una plataforma es plana: no hay "dentro" que inspeccionar.
     requiereInspeccionInterna: false,
-    // DISCREPANCIA 2 (heredada): el código viejo se contradecía solo.
-    // `getContainerLogic` decía explícitamente que plataforma SÍ lleva
-    // inspección exterior de 19 puntos, pero `needsContainerVisual` la
-    // excluía, así que la pantalla nunca aparecía. Se sigue el comentario
-    // explícito (sí lleva exterior) porque es lo que tiene sentido: el chasis,
-    // las llantas y las luces de una plataforma sí se revisan.
-    // Pendiente de confirmar con David.
     requiereInspeccionExterna: true,
-    requierePlacasRemolque: false,
+    requierePlacasRemolque: true,
     // El tipo original marcaba "full NO disponible para plataforma".
     admiteFull: false,
     requiereTemperatura: false,

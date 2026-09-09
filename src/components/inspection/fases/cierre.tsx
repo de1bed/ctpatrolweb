@@ -173,10 +173,21 @@ export function FaseSellos(
             </div>
 
             <div className="mt-4">
-              <p className="mb-2 text-sm font-medium text-ink-secondary">
+              <p className="text-sm font-medium text-ink-secondary">
                 Protocolo VVTT
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-snug text-ink-secondary">
+                {PASOS_VVTT.map((paso) => (
+                  <li key={paso.clave}>
+                    <span className="font-semibold text-ink">{paso.nombre}.</span>{" "}
+                    {paso.pista}
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-3 text-sm font-medium text-ink-secondary">
+                Confirma cada paso
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 {PASOS_VVTT.map((paso) => {
                   const hecho = sello[paso.clave];
                   return (
@@ -185,7 +196,10 @@ export function FaseSellos(
                       type="button"
                       role="checkbox"
                       aria-checked={hecho}
-                      onClick={() => actualizar(i, { [paso.clave]: !hecho } as Partial<Sello>)}
+                      aria-label={`${paso.nombre}: ${paso.pista}`}
+                      onClick={() =>
+                        actualizar(i, { [paso.clave]: !hecho } as Partial<Sello>)
+                      }
                       className={cn(
                         "flex min-h-14 items-center gap-2.5 rounded-xl border-2 px-3 text-left transition-colors",
                         hecho
@@ -203,13 +217,8 @@ export function FaseSellos(
                       >
                         {hecho && <Check className="size-4" strokeWidth={3} aria-hidden />}
                       </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-ink">
-                          {paso.nombre}
-                        </span>
-                        <span className="block truncate text-xs text-ink-muted">
-                          {paso.pista}
-                        </span>
+                      <span className="text-sm font-semibold text-ink">
+                        {paso.nombre}
                       </span>
                     </button>
                   );
@@ -400,7 +409,7 @@ export function FasePausa(props: PropsFase) {
   return (
     <PantallaFase
       {...props}
-      descripcion="Punto de corte: la unidad sale a cargar y regresa sellada."
+      descripcion="Punto de corte: la unidad continúa con la descarga y regresa sellada."
       etiquetaBoton="La unidad ya regresó, continuar"
       recolectar={() => ({})}
     >
@@ -415,7 +424,8 @@ export function FasePausa(props: PropsFase) {
         </p>
         <p className="max-w-sm text-sm text-ink-muted">
           Si continúas, se entiende que la unidad ya volvió y sigue la revisión
-          de sellos.
+          de sellos. La seguridad agrícola debió quedar hecha antes de esta
+          pausa.
         </p>
       </Card>
     </PantallaFase>

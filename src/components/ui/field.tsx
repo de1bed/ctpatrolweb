@@ -1,9 +1,48 @@
 "use client";
 
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, CircleHelp } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/cn";
+
+/**
+ * Ayuda contextual junto a la etiqueta.
+ *
+ * No valida ni bloquea: solo orienta. Un toque abre la explicación y otro
+ * la cierra, para no tapar el campo en una pantalla de patio.
+ */
+export function AyudaCampo({ texto }: { texto: string }) {
+  const [abierta, setAbierta] = React.useState(false);
+  const id = React.useId();
+
+  return (
+    <span className="relative inline-flex shrink-0">
+      <button
+        type="button"
+        aria-label="Más información"
+        aria-expanded={abierta}
+        aria-controls={id}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setAbierta((v) => !v);
+        }}
+        className="flex size-6 items-center justify-center rounded-full text-ink-muted transition-colors active:bg-surface-sunken"
+      >
+        <CircleHelp className="size-4" aria-hidden />
+      </button>
+      {abierta && (
+        <span
+          id={id}
+          role="note"
+          className="absolute left-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-line bg-surface p-3 text-sm font-normal leading-snug text-ink-secondary shadow-lg"
+        >
+          {texto}
+        </span>
+      )}
+    </span>
+  );
+}
 
 /**
  * Campo de formulario.
@@ -18,6 +57,8 @@ export interface FieldProps {
   label: string;
   /** Texto de ayuda bajo el campo. Se oculta cuando hay error. */
   hint?: string;
+  /** Explicación al tocar el icono junto a la etiqueta. No bloquea la captura. */
+  ayuda?: string;
   error?: string | null;
   required?: boolean;
   /** Marca el campo como precargado desde el panel admin. */
@@ -33,6 +74,7 @@ export interface FieldProps {
 export function Field({
   label,
   hint,
+  ayuda,
   error,
   required,
   prefilled,
@@ -50,6 +92,7 @@ export function Field({
         className="flex items-center gap-2 text-sm font-medium text-ink-secondary"
       >
         {label}
+        {ayuda && <AyudaCampo texto={ayuda} />}
         {required && (
           <span className="text-danger-600" aria-label="obligatorio">
             *

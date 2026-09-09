@@ -8,12 +8,14 @@ import { CamaraPantallaCompleta } from "@/components/inspection/camera";
 import { GuideSheet } from "@/components/inspection/guide-sheet";
 import { PantallaFase } from "@/components/inspection/phase-shell";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/field";
+import { Field, Textarea } from "@/components/ui/field";
+import { OptionCards } from "@/components/ui/option-cards";
 import { cn } from "@/lib/cn";
 import {
   PUNTOS_POR_GRUPO,
   type Calificacion,
   type GrupoPuntos,
+  type PuntoInspeccion,
 } from "@/lib/inspection/puntos";
 import { guiaDe } from "@/lib/inspection/guias";
 import { borrarFoto, fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
@@ -29,6 +31,18 @@ type EstadoPunto = {
 };
 
 const VACIO: EstadoPunto = { calificacion: null, nota: "", noAplica: false };
+
+function estadosDesdePrevios(
+  puntos: PuntoInspeccion[],
+  datos: Record<string, unknown> | null
+): Record<string, EstadoPunto> {
+  const guardados = previo<Record<string, EstadoPunto>>(datos, "puntos", {});
+  const inicial: Record<string, EstadoPunto> = {};
+  for (const p of puntos) {
+    inicial[p.clave] = { ...VACIO, ...(guardados[p.clave] ?? {}) };
+  }
+  return inicial;
+}
 
 const BOTONES: { valor: Calificacion; etiqueta: string; clases: string }[] = [
   {
@@ -62,27 +76,30 @@ export function FaseVisual(
     latitud: number | null;
     longitud: number | null;
     /** Evidencia ya subida, indexada por punto. Habilita el análisis con IA. */
-    evidenciaSubida?: Record<string, { id: string; analisis: unknown }>;
+    evidenciaSubida?: Record<
+      string,
+      { id: string; analisis: unknown; url?: string | null }
+    >;
+    /** Solo admin puede ejecutar el rechazo de la unidad. */
+    puedeRechazar?: boolean;
   }
 ) {
   const puntos = PUNTOS_POR_GRUPO[props.grupo];
 
-  const [estados, setEstados] = useState<Record<string, EstadoPunto>>(() => {
-    const guardados = previo<Record<string, EstadoPunto>>(
-      props.datosPrevios,
-      "puntos",
-      {}
-    );
-    const inicial: Record<string, EstadoPunto> = {};
-    for (const p of puntos) {
-      inicial[p.clave] = { ...VACIO, ...(guardados[p.clave] ?? {}) };
-    }
-    return inicial;
-  });
+  const [estados, setEstados] = useState<Record<string, EstadoPunto>>(() =>
+    estadosDesdePrevios(puntos, props.datosPrevios)
+  );
+  const [escalamiento, setEscalamiento] = useState(() =>
+    previo(props.datosPrevios, "escalamiento", "ninguno")
+  );
+  const [escalamientoNota, setEscalamientoNota] = useState(() =>
+    previo(props.datosPrevios, "escalamientoNota", "")
+  );
 
   const [fotos, setFotos] = useState<Record<string, FotoLocal>>({});
   const [capturando, setCapturando] = useState<string | null>(null);
   const [guiaAbierta, setGuiaAbierta] = useState<string | null>(null);
+  const [errorFoto, setErrorFoto] = useState<string | null>(null);
 
   // ── Fotos ya guardadas de este paso ─────────────────────────────────────
   useEffect(() => {
@@ -124,44 +141,104 @@ export function FaseVisual(
   );
 
   async function alCapturar(foto: FotoCapturada, capturadaEn: string) {
-    if (!puntoActivo) return;
+    const punto = puntoActivo ?? puntos.find((p) => p.clave === capturando);
+    if (!punto) return;
 
-    // Reemplazar la foto de un punto borra la anterior: guardar las dos
-    // llenaría el dispositivo con descartes que nadie va a ver.
-    const anterior = fotos[puntoActivo.clave];
-    if (anterior) await borrarFoto(anterior.clientId);
+    setErrorFoto(null);
 
-    const guardada = await guardarFoto({
-      clientId: crypto.randomUUID(),
-      inspeccionId: props.inspeccionId,
-      paso: props.clavePaso,
-      puntoClave: puntoActivo.clave,
-      puntoNombre: puntoActivo.nombre,
-      blob: foto.blob,
-      mimeType: foto.mimeType,
-      ancho: foto.ancho,
-      alto: foto.alto,
-      capturadaEn,
-      latitud: props.latitud,
-      longitud: props.longitud,
-    });
+    try {
+      const anterior = fotos[punto.clave];
+      if (anterior) await borrarFoto(anterior.clientId);
 
-    setFotos((prev) => ({ ...prev, [puntoActivo.clave]: guardada }));
-    setCapturando(null);
+      const guardada = await guardarFoto({
+        clientId: crypto.randomUUID(),
+        inspeccionId: props.inspeccionId,
+        paso: props.clavePaso,
+        puntoClave: punto.clave,
+        puntoNombre: punto.nombre,
+        blob: foto.blob,
+        mimeType: foto.mimeType,
+        ancho: foto.ancho,
+        alto: foto.alto,
+        capturadaEn,
+        latitud: props.latitud,
+        longitud: props.longitud,
+      });
+
+      setFotos((prev) => ({ ...prev, [punto.clave]: guardada }));
+      setCapturando(null);
+    } catch (e) {
+      setErrorFoto(
+        e instanceof Error
+          ? e.message
+          : "No se pudo guardar la foto en el dispositivo."
+      );
+    }
   }
 
   function actualizar(clave: string, cambios: Partial<EstadoPunto>) {
     setEstados((prev) => ({ ...prev, [clave]: { ...prev[clave], ...cambios } }));
   }
 
+  function hayFoto(clave: string): boolean {
+    return Boolean(fotos[clave] || props.evidenciaSubida?.[clave]?.url);
+  }
+
+  function urlDe(clave: string): string | null {
+    return urls[clave] ?? props.evidenciaSubida?.[clave]?.url ?? null;
+  }
+
   // ── Qué falta ───────────────────────────────────────────────────────────
   const pendientes = puntos.filter((p) => {
     const e = estados[p.clave];
     if (e.noAplica) return false;
-    return !e.calificacion || !fotos[p.clave];
+    return !e.calificacion || !hayFoto(p.clave);
   });
 
   const listos = puntos.length - pendientes.length;
+
+  const hallazgos = puntos.filter((p) => {
+    const e = estados[p.clave];
+    return (
+      !e.noAplica &&
+      (e.calificacion === "regular" || e.calificacion === "malo")
+    );
+  }).length;
+
+  const faltaEscalamiento =
+    hallazgos > 0 && (escalamiento === "ninguno" || !escalamiento);
+
+  const opcionesEscalamiento = [
+    {
+      valor: "avisar_admin",
+      etiqueta: "Avisar al administrador",
+      descripcion: "Queda constancia para revisión de oficina",
+    },
+    {
+      valor: "incidencia",
+      etiqueta: "Registrar incidencia",
+      descripcion: "Se documenta el conjunto de hallazgos",
+    },
+    {
+      valor: "revision_superior",
+      etiqueta: "Solicitar revisión de un superior",
+      descripcion: "Un supervisor debe confirmar antes de continuar",
+    },
+    {
+      valor: "marcar_rechazo",
+      etiqueta: "Marcar para posible rechazo",
+      descripcion: "La unidad queda señalada, sin cerrar el rechazo",
+    },
+    ...(props.puedeRechazar
+      ? [
+          {
+            valor: "rechazar",
+            etiqueta: "Rechazar la unidad",
+            descripcion: "Cierra operativamente esta inspección como no aprobada",
+          },
+        ]
+      : []),
+  ];
 
   return (
     <>
@@ -171,7 +248,9 @@ export function FaseVisual(
         faltante={
           pendientes.length > 0
             ? `Faltan ${pendientes.length} de ${puntos.length} puntos`
-            : null
+            : faltaEscalamiento
+              ? "Indica qué decisión se toma ante los hallazgos"
+              : null
         }
         recolectar={() => ({
           puntos: Object.fromEntries(
@@ -184,8 +263,20 @@ export function FaseVisual(
               },
             ])
           ),
+          escalamiento: hallazgos > 0 ? escalamiento : "ninguno",
+          escalamientoNota,
         })}
       >
+        {errorFoto && (
+          <div
+            role="alert"
+            className="mb-4 flex items-start gap-2.5 rounded-xl border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700"
+          >
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>{errorFoto}</span>
+          </div>
+        )}
+
         {/* Contador de avance dentro de la fase. Con 19 puntos, saber cuántos
             van evita la sensación de que la lista no se acaba. */}
         <div className="mb-4 flex items-center gap-2.5 rounded-xl bg-surface-raised px-4 py-3">
@@ -213,8 +304,10 @@ export function FaseVisual(
         <ul className="flex flex-col gap-3">
           {puntos.map((punto, i) => {
             const estado = estados[punto.clave];
-            const foto = fotos[punto.clave];
-            const completo = estado.noAplica || (estado.calificacion && foto);
+            const fotoLocal = fotos[punto.clave];
+            const urlFoto = urlDe(punto.clave);
+            const completo =
+              estado.noAplica || (estado.calificacion && hayFoto(punto.clave));
 
             return (
               <li key={punto.clave}>
@@ -231,23 +324,23 @@ export function FaseVisual(
                       onClick={() => setCapturando(punto.clave)}
                       disabled={estado.noAplica}
                       aria-label={
-                        foto
+                        urlFoto
                           ? `Volver a tomar la foto de ${punto.nombre}`
                           : `Tomar foto de ${punto.nombre}`
                       }
                       className={cn(
                         "relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2",
                         "transition-transform active:scale-95 disabled:active:scale-100",
-                        foto
+                        urlFoto
                           ? "border-ok-600"
                           : "border-dashed border-line-strong bg-surface-sunken"
                       )}
                     >
-                      {foto && urls[punto.clave] ? (
+                      {urlFoto ? (
                         <>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={urls[punto.clave]}
+                            src={urlFoto}
                             alt={`Evidencia de ${punto.nombre}`}
                             className="size-full object-cover"
                           />
@@ -256,7 +349,12 @@ export function FaseVisual(
                           </span>
                         </>
                       ) : (
-                        <Camera className="size-7 text-ink-muted" aria-hidden />
+                        <span className="flex flex-col items-center gap-0.5 px-1">
+                          <Camera className="size-6 text-brand-600" aria-hidden />
+                          <span className="text-[10px] font-semibold leading-none text-brand-600">
+                            Foto
+                          </span>
+                        </span>
                       )}
                     </button>
 
@@ -331,7 +429,7 @@ export function FaseVisual(
 
                       {/* Análisis con IA: solo tiene sentido si hay foto y no
                           se marcó como "no aplica". */}
-                      {!estado.noAplica && foto && (
+                      {!estado.noAplica && (fotoLocal || urlFoto) && (
                         <AnalisisIA
                           inspeccionId={props.inspeccionId}
                           mediaId={props.evidenciaSubida?.[punto.clave]?.id ?? null}
@@ -374,6 +472,39 @@ export function FaseVisual(
             );
           })}
         </ul>
+
+        {hallazgos > 0 && (
+          <Card className="mt-5 p-4">
+            <p className="font-semibold text-ink">Decisión ante hallazgos</p>
+            <p className="mt-1 text-sm text-ink-secondary">
+              Hay {hallazgos} {hallazgos === 1 ? "punto" : "puntos"} en Regular
+              o Malo. Deja constancia de la acción operativa.
+            </p>
+            <div className="mt-3">
+              <OptionCards
+                nombre="escalamiento-visual"
+                opciones={opcionesEscalamiento}
+                valor={escalamiento === "ninguno" ? null : escalamiento}
+                onChange={setEscalamiento}
+              />
+            </div>
+            <Field
+              label="Comentario"
+              hint="Opcional. Contexto para quien revise después."
+              className="mt-3"
+            >
+              {(p) => (
+                <Textarea
+                  {...p}
+                  rows={3}
+                  value={escalamientoNota}
+                  onChange={(e) => setEscalamientoNota(e.target.value)}
+                  placeholder="Qué se acordó o por qué se escala"
+                />
+              )}
+            </Field>
+          </Card>
+        )}
       </PantallaFase>
 
       {guiaAbierta && guiaDe(guiaAbierta) && (

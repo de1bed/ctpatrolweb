@@ -7,6 +7,7 @@ import { registrarEvidencia } from "@/app/(flujo)/inspeccion/[id]/media-acciones
 import { cn } from "@/lib/cn";
 import {
   actualizarEstado,
+  EVENTO_EVIDENCIA_NUEVA,
   liberarSubidas,
   pendientesDeSubida,
   type FotoLocal,
@@ -106,6 +107,7 @@ export function Uploader({ companyAccountId }: { companyAccountId: string }) {
     };
 
     window.addEventListener("online", alVolverRed);
+    window.addEventListener(EVENTO_EVIDENCIA_NUEVA, alVolverRed);
     document.addEventListener("visibilitychange", alVolverVisible);
 
     // Latido de respaldo por si algo se quedó pendiente sin ningún evento.
@@ -115,6 +117,7 @@ export function Uploader({ companyAccountId }: { companyAccountId: string }) {
       clearTimeout(inicial);
       clearInterval(latido);
       window.removeEventListener("online", alVolverRed);
+      window.removeEventListener(EVENTO_EVIDENCIA_NUEVA, alVolverRed);
       document.removeEventListener("visibilitychange", alVolverVisible);
     };
   }, [drenar]);

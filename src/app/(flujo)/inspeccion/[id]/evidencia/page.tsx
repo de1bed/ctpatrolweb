@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Galeria, type ItemEvidencia } from "./galeria";
 
 export const metadata: Metadata = { title: "Evidencia" };
+export const dynamic = "force-dynamic";
 
 /** Vigencia de los enlaces. Corta: son evidencia, no contenido público. */
 const MINUTOS_ENLACE = 30;
@@ -32,7 +33,7 @@ export default async function EvidenciaPage({
 
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, display_id, status, transport_type, is_full, progress")
+    .select("id, display_id, status, transport_type, is_full, progress, data")
     .eq("id", id)
     .maybeSingle();
 
@@ -70,18 +71,23 @@ export default async function EvidenciaPage({
   const tituloDePaso = new Map(flujo.pasos.map((p) => [p.clave, p.titulo]));
 
   const items: ItemEvidencia[] = evidencia
-    .map((m) => ({
-      id: m.id,
-      tipo: m.kind === "video" ? ("video" as const) : ("foto" as const),
-      paso: m.phase,
-      pasoTitulo: tituloDePaso.get(m.phase) ?? m.phase,
-      punto: m.point_label ?? m.point_key ?? "Sin punto",
-      url: m.storage_path ? (urlPorRuta.get(m.storage_path) ?? null) : null,
-      capturadaEn: m.captured_at,
-      latitud: m.latitude,
-      longitud: m.longitude,
-      tieneAnalisis: Boolean(m.ai_analysis),
-    }))
+    .map((m) => {
+      const contexto = contextoDePunto(inspeccion.data, m.phase, m.point_key);
+      return {
+        id: m.id,
+        tipo: m.kind === "video" ? ("video" as const) : ("foto" as const),
+        paso: m.phase,
+        pasoTitulo: tituloDePaso.get(m.phase) ?? m.phase,
+        punto: m.point_label ?? m.point_key ?? "Sin punto",
+        url: m.storage_path ? (urlPorRuta.get(m.storage_path) ?? null) : null,
+        capturadaEn: m.captured_at,
+        latitud: m.latitude,
+        longitud: m.longitude,
+        tieneAnalisis: Boolean(m.ai_analysis),
+        calificacion: contexto.calificacion,
+        hallazgo: contexto.hallazgo,
+      };
+    })
     .filter((i) => i.url !== null);
 
   const abierta =
@@ -123,4 +129,31 @@ export default async function EvidenciaPage({
       </main>
     </>
   );
+}
+
+function contextoDePunto(
+  data: unknown,
+  fase: string,
+  pointKey: string | null
+): { calificacion: string | null; hallazgo: string | null } {
+  if (!pointKey || !data || typeof data !== "object" || Array.isArray(data)) {
+    return { calificacion: null, hallazgo: null };
+  }
+  const paso = (data as Record<string, unknown>)[fase];
+  if (!paso || typeof paso !== "object") {
+    return { calificacion: null, hallazgo: null };
+  }
+  const puntos = (paso as Record<string, unknown>).puntos;
+  if (!puntos || typeof puntos !== "object") {
+    return { calificacion: null, hallazgo: null };
+  }
+  const punto = (puntos as Record<string, unknown>)[pointKey];
+  if (!punto || typeof punto !== "object") {
+    return { calificacion: null, hallazgo: null };
+  }
+  const p = punto as Record<string, unknown>;
+  return {
+    calificacion: typeof p.calificacion === "string" ? p.calificacion : null,
+    hallazgo: typeof p.nota === "string" && p.nota.trim() ? p.nota : null,
+  };
 }

@@ -204,12 +204,19 @@ export const FASES: DefinicionFase[] = [
     porUnidad: true,
     puntos: "exterior",
   },
+  {
+    id: "agricola",
+    nombre: "Seguridad agrícola",
+    descripcion: "Revisión de contaminación externa e interna, antes de la descarga",
+    grupo: "inspeccion-fisica",
+    critica: false,
+  },
 
   // ── Pausa ─────────────────────────────────────────────────────────────────
   {
     id: "pausa",
     nombre: "Pausa de carga",
-    descripcion: "La unidad sale a cargar y regresa sellada",
+    descripcion: "La unidad continúa con la descarga y regresa sellada",
     grupo: "inspeccion-fisica",
     critica: false,
     esPausa: true,
@@ -234,13 +241,6 @@ export const FASES: DefinicionFase[] = [
     grupo: "cierre",
     critica: false,
     porUnidad: true,
-  },
-  {
-    id: "agricola",
-    nombre: "Seguridad agrícola",
-    descripcion: "Revisión de contaminación externa e interna",
-    grupo: "cierre",
-    critica: false,
   },
   {
     id: "estado-salida",

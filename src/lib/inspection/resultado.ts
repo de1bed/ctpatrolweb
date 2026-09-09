@@ -31,7 +31,16 @@ export function calcularResultado(data: Json | null | undefined): ResultadoInspe
     for (const valorFase of Object.values(data as Record<string, unknown>)) {
       if (!valorFase || typeof valorFase !== "object") continue;
 
-      const puntos = (valorFase as Record<string, unknown>).puntos;
+      const fase = valorFase as Record<string, unknown>;
+      if (fase.escalamiento === "rechazar") criticos++;
+      if (
+        fase.recepcionMercancia === "rechazada_total" ||
+        fase.recepcionMercancia === "unidad_rechazada"
+      ) {
+        criticos++;
+      }
+
+      const puntos = fase.puntos;
       if (!puntos || typeof puntos !== "object") continue;
 
       for (const punto of Object.values(puntos as Record<string, unknown>)) {
@@ -55,6 +64,7 @@ export function calcularResultado(data: Json | null | undefined): ResultadoInspe
   return {
     // Un solo punto en "malo" reprueba la unidad. Es lo que exige C-TPAT:
     // un compartimento alterado no se compensa con otros quince puntos bien.
+    // Un rechazo operativo explícito también cierra en no aprobada.
     aprobada: criticos === 0,
     hallazgos,
     criticos,

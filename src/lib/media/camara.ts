@@ -154,6 +154,46 @@ function dibujarMetadatos(
  * no hay trasera y el navegador entrega la que haya. Por eso no se trata como
  * error si devuelve la frontal.
  */
+/**
+ * Quema metadatos sobre una imagen ya tomada (cámara nativa o galería).
+ *
+ * Es el camino de respaldo cuando getUserMedia no abre: en muchos teléfonos
+ * el `<input capture>` sí funciona, y sin este paso esas fotos llegarían
+ * sin fecha ni GPS impresos.
+ */
+export async function capturarDeArchivo(
+  archivo: Blob,
+  metadatos: MetadatosCaptura,
+  etiquetaPunto: string
+): Promise<FotoCapturada> {
+  const mapa = await createImageBitmap(archivo);
+  const escala = Math.min(1, LADO_MAXIMO / Math.max(mapa.width, mapa.height));
+  const ancho = Math.round(mapa.width * escala);
+  const alto = Math.round(mapa.height * escala);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = ancho;
+  canvas.height = alto;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    mapa.close();
+    throw new Error("No se pudo preparar el lienzo de la imagen.");
+  }
+
+  ctx.drawImage(mapa, 0, 0, ancho, alto);
+  mapa.close();
+  dibujarMetadatos(ctx, ancho, alto, metadatos, etiquetaPunto);
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", CALIDAD)
+  );
+
+  if (!blob) throw new Error("No se pudo generar la imagen.");
+
+  return { blob, ancho, alto, mimeType: "image/jpeg" };
+}
+
 export async function abrirCamara(): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error(
@@ -161,16 +201,22 @@ export async function abrirCamara(): Promise<MediaStream> {
     );
   }
 
-  return navigator.mediaDevices.getUserMedia({
+  const ideal = {
     video: {
-      facingMode: { ideal: "environment" },
-      // Se pide alto y el navegador baja si no puede. Pedir poco y que
-      // entregue poco no tiene vuelta atrás.
+      facingMode: { ideal: "environment" as const },
       width: { ideal: 1920 },
       height: { ideal: 1080 },
     },
     audio: false,
-  });
+  };
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(ideal);
+  } catch {
+    // En laptops, iOS antiguos o cuando `environment` no existe, el pedido
+    // estricto falla. Cualquier cámara sirve: lo importante es no bloquear.
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
 }
 
 /** Traduce los errores de getUserMedia a algo accionable. */

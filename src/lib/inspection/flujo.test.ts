@@ -82,6 +82,25 @@ describe("construirFlujo · fases condicionales", () => {
     assert.ok(c.includes("tractor-visual"));
   });
 
+  it("pone seguridad agrícola antes de la pausa de carga, en todos los tipos", () => {
+    for (const tipo of TIPOS_TRANSPORTE) {
+      const c = claves(base({ tipoTransporte: tipo }));
+      const agricola = c.indexOf("agricola");
+      const pausa = c.indexOf("pausa");
+      assert.ok(agricola >= 0, `${tipo}: falta seguridad agrícola`);
+      assert.ok(pausa >= 0, `${tipo}: falta la pausa`);
+      assert.ok(
+        agricola < pausa,
+        `${tipo}: agrícola (${agricola}) debe ir antes de la pausa (${pausa})`
+      );
+    }
+  });
+
+  it("una caja refrigerada también pide placas de remolque", () => {
+    const c = claves(base({ tipoTransporte: "caja_refrigerada" }));
+    assert.ok(c.some((k) => k.startsWith("placas-remolque")));
+  });
+
   it("solo la caja refrigerada pide temperaturas", () => {
     const refrigerada = claves(base({ tipoTransporte: "caja_refrigerada" }));
     assert.ok(

@@ -115,7 +115,16 @@ export async function guardarFoto(
     storagePath: null,
   };
   await base().fotos.put(completa);
+  avisarEvidenciaNueva();
   return completa;
+}
+
+/** El uploader escucha esto para no esperar al latido de 45 s. */
+export const EVENTO_EVIDENCIA_NUEVA = "ctpatrol:evidencia-nueva";
+
+export function avisarEvidenciaNueva() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(EVENTO_EVIDENCIA_NUEVA));
 }
 
 export async function fotosDePaso(

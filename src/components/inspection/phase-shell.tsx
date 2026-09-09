@@ -107,8 +107,10 @@ export function PantallaFase({
         return;
       }
 
-      // Encadena directo con la siguiente fase. Volver al índice después de
-      // cada pantalla duplicaría los toques a lo largo de 24 pasos.
+      // La captura más reciente tiene que verse enseguida al volver al
+      // índice o a esta misma fase. Sin refresh, Next puede reutilizar el
+      // payload anterior y el inspector vería la calificación vieja.
+      router.refresh();
       router.push(
         resultado.siguiente
           ? `/inspeccion/${inspeccionId}/${resultado.siguiente}`

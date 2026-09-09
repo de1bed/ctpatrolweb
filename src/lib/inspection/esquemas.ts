@@ -31,6 +31,7 @@ export const esquemaConfiguracion = z.object({
   latitud: z.coerce.number().min(-90).max(90).nullable().optional(),
   longitud: z.coerce.number().min(-180).max(180).nullable().optional(),
   precision: z.coerce.number().nonnegative().nullable().optional(),
+  origenUbicacion: z.enum(["dispositivo", "manual"]).optional(),
 });
 
 export const esquemaCliente = z.object({
@@ -59,9 +60,43 @@ export const esquemaEstadoEntrada = z.object({
   estado: z.enum(["cargado", "vacio", "botando"]),
 });
 
-export const esquemaEstadoSalida = z.object({
-  estado: z.enum(["cargado", "vacio", "botando"]),
-});
+export const RECEPCIONES_MERCANCIA = [
+  "completa",
+  "parcial",
+  "parcial_rechazada",
+  "rechazada_total",
+  "unidad_rechazada",
+] as const;
+
+export const esquemaEstadoSalida = z
+  .object({
+    estado: z.enum(["cargado", "vacio", "botando"]),
+    recepcionMercancia: z.enum(RECEPCIONES_MERCANCIA),
+    mercanciaRechazada: textoOpcional,
+    razonRechazo: textoOpcional,
+    comentarioRechazo: textoOpcional,
+  })
+  .superRefine((d, ctx) => {
+    const hayRechazo = d.recepcionMercancia !== "completa";
+    if (hayRechazo && !(d.razonRechazo ?? "").trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Indica la razón del rechazo",
+        path: ["razonRechazo"],
+      });
+    }
+    const pideMercancia =
+      d.recepcionMercancia === "parcial" ||
+      d.recepcionMercancia === "parcial_rechazada" ||
+      d.recepcionMercancia === "rechazada_total";
+    if (pideMercancia && !(d.mercanciaRechazada ?? "").trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Indica la mercancía involucrada",
+        path: ["mercanciaRechazada"],
+      });
+    }
+  });
 
 export const esquemaDocumentos = z.object({
   factura: textoOpcional,
@@ -74,10 +109,14 @@ export const esquemaDocumentos = z.object({
     .default([]),
 });
 
-export const esquemaConductor = z.object({
+const esquemaConductorExtra = z.object({
   conductorId: z.string().uuid().nullable().optional(),
   nombre: z.string().trim().min(1, "Falta el nombre del conductor").max(200),
   licencia: textoOpcional,
+});
+
+export const esquemaConductor = esquemaConductorExtra.extend({
+  adicionales: z.array(esquemaConductorExtra).max(8).default([]),
 });
 
 export const esquemaTractor = z.object({
@@ -92,17 +131,42 @@ export const esquemaPlacasRemolque = z.object({
   placas: textoOpcional,
 });
 
+export const ACCIONES_ESCALAMIENTO = [
+  "avisar_admin",
+  "incidencia",
+  "revision_superior",
+  "marcar_rechazo",
+  "rechazar",
+] as const;
+
 /** Fases de inspección visual: una calificación por punto. */
-export const esquemaVisual = z.object({
-  puntos: z.record(
-    z.string(),
-    z.object({
-      calificacion: z.enum(CALIFICACIONES),
-      nota: textoOpcional,
-      noAplica: z.boolean().default(false),
-    })
-  ),
-});
+export const esquemaVisual = z
+  .object({
+    puntos: z.record(
+      z.string(),
+      z.object({
+        calificacion: z.enum(CALIFICACIONES),
+        nota: textoOpcional,
+        noAplica: z.boolean().default(false),
+      })
+    ),
+    escalamiento: z.enum(["ninguno", ...ACCIONES_ESCALAMIENTO]).optional(),
+    escalamientoNota: textoOpcional,
+  })
+  .superRefine((d, ctx) => {
+    const hayHallazgo = Object.values(d.puntos).some(
+      (p) =>
+        !p.noAplica &&
+        (p.calificacion === "regular" || p.calificacion === "malo")
+    );
+    if (hayHallazgo && (!d.escalamiento || d.escalamiento === "ninguno")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Indica qué decisión se toma ante los hallazgos",
+        path: ["escalamiento"],
+      });
+    }
+  });
 
 export const esquemaSellos = z.object({
   sellos: z

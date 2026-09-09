@@ -193,7 +193,12 @@ export async function guardarFase(
     event: cerrando ? "completed" : "phase_completed",
     payload: (cerrando
       ? { paso: clavePaso, aprobada: resultado?.aprobada, hallazgos: resultado?.hallazgos }
-      : { paso: clavePaso }) as Json,
+      : {
+          paso: clavePaso,
+          ...(typeof datos.escalamiento === "string" && datos.escalamiento !== "ninguno"
+            ? { escalamiento: datos.escalamiento, nota: datos.escalamientoNota ?? "" }
+            : {}),
+        }) as Json,
   });
 
   // Se recalcula el flujo YA con esta fase marcada: cambiar el tipo de
@@ -207,6 +212,8 @@ export async function guardarFase(
   });
 
   revalidatePath(`/inspeccion/${inspeccionId}`);
+  revalidatePath(`/inspeccion/${inspeccionId}/${clavePaso}`);
+  revalidatePath(`/inspeccion/${inspeccionId}/evidencia`);
 
   return { ok: true, siguiente: flujoFinal.siguiente?.clave ?? null };
 }

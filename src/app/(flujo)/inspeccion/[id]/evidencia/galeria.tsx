@@ -18,6 +18,8 @@ export type ItemEvidencia = {
   latitud: number | null;
   longitud: number | null;
   tieneAnalisis: boolean;
+  calificacion?: string | null;
+  hallazgo?: string | null;
 };
 
 /**
@@ -109,7 +111,7 @@ export function Galeria({
                   <button
                     type="button"
                     onClick={() => setAbierta(indice)}
-                    aria-label={`Ver ${item.punto}`}
+                    aria-label={`Ver ${item.punto}${item.calificacion ? `, ${item.calificacion}` : ""}`}
                     className="relative block aspect-square w-full overflow-hidden rounded-xl border border-line bg-surface-sunken transition-transform active:scale-95"
                   >
                     {item.tipo === "video" ? (
@@ -129,8 +131,23 @@ export function Galeria({
                       />
                     )}
 
+                    {item.calificacion && (
+                      <span
+                        className={cn(
+                          "absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase text-white",
+                          item.calificacion === "malo"
+                            ? "bg-danger-600"
+                            : item.calificacion === "regular"
+                              ? "bg-warn-600"
+                              : "bg-ok-600"
+                        )}
+                      >
+                        {item.calificacion}
+                      </span>
+                    )}
+
                     {item.tipo === "video" && (
-                      <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-white">
                         VIDEO
                       </span>
                     )}
@@ -158,7 +175,12 @@ export function Galeria({
             <div className="flex min-h-14 flex-1 flex-col justify-center">
               <p className="truncate font-semibold text-white">{activa.punto}</p>
               <p className="truncate text-xs text-white/70">
-                {activa.pasoTitulo} · {abierta! + 1} de {items.length}
+                {activa.pasoTitulo}
+                {activa.calificacion
+                  ? ` · ${activa.calificacion === "bueno" ? "Bueno" : activa.calificacion === "regular" ? "Regular" : "Malo"}`
+                  : ""}
+                {" · "}
+                {abierta! + 1} de {items.length}
               </p>
             </div>
             <button
@@ -217,6 +239,9 @@ export function Galeria({
               <p className="font-mono text-xs text-white/80">
                 {format(new Date(activa.capturadaEn), "dd/MM/yyyy HH:mm:ss")}
               </p>
+              {activa.hallazgo && (
+                <p className="mt-2 text-sm text-white/85">{activa.hallazgo}</p>
+              )}
               {activa.latitud != null && activa.longitud != null && (
                 <p className="mt-0.5 flex items-center gap-1 font-mono text-xs text-white/60">
                   <MapPin className="size-3 shrink-0" aria-hidden />

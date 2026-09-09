@@ -23,6 +23,12 @@ import { cn } from "@/lib/cn";
  * "TRANSPORTES" dispara once consultas y el inspector ve la lista brincar
  * mientras teclea.
  */
+export type SeleccionCatalogo = {
+  id: string | null;
+  nombre: string;
+  detalle?: string | null;
+};
+
 export function CatalogPicker({
   tipo,
   etiqueta,
@@ -31,6 +37,8 @@ export function CatalogPicker({
   puedeCrear,
   seleccionado,
   onSeleccionar,
+  ayuda,
+  ayudaDetalle,
 }: {
   tipo: TipoCatalogo;
   etiqueta: string;
@@ -38,8 +46,10 @@ export function CatalogPicker({
   /** Nombre del segundo campo al dar de alta (placas, licencia, RFC…). */
   etiquetaDetalle: string;
   puedeCrear: boolean;
-  seleccionado: { id: string | null; nombre: string } | null;
-  onSeleccionar: (v: { id: string | null; nombre: string } | null) => void;
+  seleccionado: SeleccionCatalogo | null;
+  onSeleccionar: (v: SeleccionCatalogo | null) => void;
+  ayuda?: string;
+  ayudaDetalle?: string;
 }) {
   const [termino, setTermino] = useState("");
   const [resultados, setResultados] = useState<ItemCatalogo[]>([]);
@@ -76,25 +86,34 @@ export function CatalogPicker({
   // ── Ya hay algo elegido ────────────────────────────────────────────────
   if (seleccionado) {
     return (
-      <Field label={etiqueta} required>
+      <Field label={etiqueta} required ayuda={ayuda}>
         {() => (
-          <div className="flex items-center gap-3 rounded-xl border-2 border-brand-600 bg-brand-50 p-3.5 dark:bg-brand-950/50">
-            <Check className="size-5 shrink-0 text-brand-600" aria-hidden />
-            <span className="min-w-0 flex-1 truncate font-semibold text-ink">
-              {seleccionado.nombre}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                onSeleccionar(null);
-                setTermino("");
-                setCreando(false);
-              }}
-              aria-label={`Cambiar ${etiqueta.toLowerCase()}`}
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors active:bg-surface-sunken"
-            >
-              <X className="size-5" aria-hidden />
-            </button>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-3 rounded-xl border-2 border-brand-600 bg-brand-50 p-3.5 dark:bg-brand-950/50">
+              <Check className="size-5 shrink-0 text-brand-600" aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold text-ink">
+                  {seleccionado.nombre}
+                </span>
+                {seleccionado.detalle ? (
+                  <span className="block truncate text-sm text-ink-muted">
+                    {etiquetaDetalle}: {seleccionado.detalle}
+                  </span>
+                ) : null}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  onSeleccionar(null);
+                  setTermino("");
+                  setCreando(false);
+                }}
+                aria-label={`Cambiar ${etiqueta.toLowerCase()}`}
+                className="flex size-9 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors active:bg-surface-sunken"
+              >
+                <X className="size-5" aria-hidden />
+              </button>
+            </div>
           </div>
         )}
       </Field>
@@ -113,7 +132,7 @@ export function CatalogPicker({
           </p>
         )}
 
-        <Field label={etiqueta} required>
+        <Field label={etiqueta} required ayuda={ayuda}>
           {(p) => (
             <Input
               {...p}
@@ -125,7 +144,7 @@ export function CatalogPicker({
           )}
         </Field>
 
-        <Field label={etiquetaDetalle}>
+        <Field label={etiquetaDetalle} ayuda={ayudaDetalle}>
           {(p) => (
             <Input
               {...p}
@@ -159,7 +178,11 @@ export function CatalogPicker({
                   detalle: detalleNuevo.trim() || undefined,
                 });
                 if (r.ok) {
-                  onSeleccionar({ id: r.item.id, nombre: r.item.etiqueta });
+                  onSeleccionar({
+                    id: r.item.id,
+                    nombre: r.item.etiqueta,
+                    detalle: r.item.detalle,
+                  });
                   setCreando(false);
                 } else {
                   setErrorAlta(r.error);
@@ -176,7 +199,7 @@ export function CatalogPicker({
 
   // ── Búsqueda ───────────────────────────────────────────────────────────
   return (
-    <Field label={etiqueta} required>
+    <Field label={etiqueta} required ayuda={ayuda}>
       {(p) => (
         <div className="flex flex-col gap-2.5">
           <div className="relative">
@@ -209,7 +232,11 @@ export function CatalogPicker({
                   <button
                     type="button"
                     onClick={() =>
-                      onSeleccionar({ id: item.id, nombre: item.etiqueta })
+                      onSeleccionar({
+                        id: item.id,
+                        nombre: item.etiqueta,
+                        detalle: item.detalle,
+                      })
                     }
                     className={cn(
                       "flex min-h-12 w-full items-center px-4 py-3 text-left",

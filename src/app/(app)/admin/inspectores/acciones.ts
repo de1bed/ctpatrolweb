@@ -111,13 +111,10 @@ const esquemaAlta = z.object({
 /**
  * Alta de usuario.
  *
- * Requiere service role porque crear un usuario de Auth no es una operación
- * que un cliente pueda hacer. Es la única parte de la app que usa esa llave,
- * y por eso vive detrás de `requerirAdmin`.
+ * Prefiere service role si está configurado. Si no, usa `admin_crear_usuario`,
+ * un RPC que solo puede ejecutar un admin de la cuenta.
  *
- * El perfil NO se inserta aquí: lo crea el trigger `handle_new_user` leyendo
- * los metadatos. Así solo hay un camino de alta y no puede quedar un usuario
- * de Auth sin su perfil.
+ * El perfil NO se inserta aquí: lo crea el trigger `handle_new_user`.
  */
 export async function crearUsuario(entrada: unknown): Promise<Resultado> {
   const sesion = await requerirAdmin();
@@ -132,33 +129,46 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
   try {
     admin = createAdminClient();
   } catch {
-    return {
-      ok: false,
-      error:
-        "Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor. Avisa a soporte.",
-    };
+    admin = null;
   }
 
-  const { error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    // Sin correo de confirmación: el admin ya validó a esta persona en la
-    // vida real y el inspector necesita entrar hoy, no cuando revise su
-    // bandeja.
-    email_confirm: true,
-    user_metadata: {
-      company_account_id: sesion.companyAccountId,
-      role: rol,
-      full_name: nombre,
-    },
-  });
+  if (admin) {
+    const { error } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        company_account_id: sesion.companyAccountId,
+        role: rol,
+        full_name: nombre,
+      },
+    });
 
-  if (error) {
-    if (error.message.includes("already registered")) {
-      return { ok: false, error: "Ya existe un usuario con ese correo." };
+    if (error) {
+      if (error.message.includes("already registered")) {
+        return { ok: false, error: "Ya existe un usuario con ese correo." };
+      }
+      console.error("No se pudo crear el usuario", error);
+      return { ok: false, error: "No se pudo crear el usuario." };
     }
-    console.error("No se pudo crear el usuario", error);
-    return { ok: false, error: "No se pudo crear el usuario." };
+  } else {
+    // Sin service role: el RPC SECURITY DEFINER crea el usuario en Auth
+    // con la cuenta del admin que está pidiendo el alta.
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("admin_crear_usuario", {
+      p_email: email,
+      p_password: password,
+      p_full_name: nombre,
+      p_role: rol,
+    });
+
+    if (error) {
+      if (error.message.includes("Ya existe")) {
+        return { ok: false, error: "Ya existe un usuario con ese correo." };
+      }
+      console.error("No se pudo crear el usuario", error);
+      return { ok: false, error: error.message || "No se pudo crear el usuario." };
+    }
   }
 
   revalidatePath("/admin/inspectores");

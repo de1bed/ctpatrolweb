@@ -805,6 +805,15 @@ export type Database = {
       }
       is_account_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      admin_crear_usuario: {
+        Args: {
+          p_email: string
+          p_password: string
+          p_full_name: string
+          p_role: Database["public"]["Enums"]["user_role"]
+        }
+        Returns: string
+      }
       verificar_inspeccion: {
         Args: { token: string }
         Returns: {

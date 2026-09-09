@@ -1,10 +1,12 @@
 "use client";
 
-import { Camera, LoaderCircle, TriangleAlert, X } from "lucide-react";
+import { Camera, ImagePlus, LoaderCircle, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   abrirCamara,
+  capturarDeArchivo,
   capturarDeVideo,
   explicarErrorCamara,
   formatearCoordenadas,
@@ -13,15 +15,12 @@ import {
 } from "@/lib/media/camara";
 
 /**
- * Cámara a pantalla completa.
+ * Cámara a pantalla completa, con respaldo nativo del teléfono.
  *
- * Ocupa todo y sin distracciones: el inspector está apuntando a un punto
- * concreto de un tractor, no navegando una app. Se ve qué punto toca, la
- * imagen en vivo con los metadatos que van a quedar impresos, y un obturador
- * grande.
- *
- * El obturador mide 76px y va centrado abajo, a propósito: es el objetivo de
- * un pulgar que sostiene el teléfono con una mano, a veces con guante.
+ * El visor en vivo es lo ideal, pero getUserMedia falla seguido: permiso,
+ * HTTP, laptop sin webcam, iOS caprichoso. En esos casos el inspector tiene
+ * que poder tomar la foto igual — el input `capture` abre la cámara del
+ * sistema, que sí funciona.
  */
 export function CamaraPantallaCompleta({
   puntoNombre,
@@ -33,10 +32,11 @@ export function CamaraPantallaCompleta({
   puntoNombre: string;
   latitud: number | null;
   longitud: number | null;
-  onCapturar: (foto: FotoCapturada, capturadaEn: string) => void;
+  onCapturar: (foto: FotoCapturada, capturadaEn: string) => void | Promise<void>;
   onCerrar: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const archivoRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [estado, setEstado] = useState<"abriendo" | "lista" | "error">("abriendo");
@@ -44,19 +44,33 @@ export function CamaraPantallaCompleta({
   const [capturando, setCapturando] = useState(false);
   const [ahora, setAhora] = useState(() => new Date().toISOString());
 
-  // El reloj de la vista previa avanza para que lo que se ve sea lo que se
-  // va a quemar, no una hora congelada de cuando se abrió la cámara.
   useEffect(() => {
     const t = setInterval(() => setAhora(new Date().toISOString()), 1000);
     return () => clearInterval(t);
   }, []);
 
   const cerrarStream = useCallback(() => {
-    // Sin detener cada pista, la luz de la cámara se queda encendida y el
-    // dispositivo sigue ocupado: la siguiente pantalla no puede abrirla.
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   }, []);
+
+  const intentarAbrir = useCallback(async () => {
+    setEstado("abriendo");
+    setError(null);
+    try {
+      const stream = await abrirCamara();
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      setEstado("lista");
+    } catch (e) {
+      cerrarStream();
+      setError(explicarErrorCamara(e));
+      setEstado("error");
+    }
+  }, [cerrarStream]);
 
   useEffect(() => {
     let cancelado = false;
@@ -64,14 +78,10 @@ export function CamaraPantallaCompleta({
     (async () => {
       try {
         const stream = await abrirCamara();
-
-        // Si el componente se desmontó mientras el usuario decidía el
-        // permiso, hay que soltar el stream o queda huérfano y encendido.
         if (cancelado) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
-
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -92,6 +102,11 @@ export function CamaraPantallaCompleta({
     };
   }, [cerrarStream]);
 
+  async function entregar(foto: FotoCapturada, capturadaEn: string) {
+    navigator.vibrate?.(40);
+    await onCapturar(foto, capturadaEn);
+  }
+
   async function disparar() {
     if (!videoRef.current || capturando) return;
 
@@ -104,12 +119,7 @@ export function CamaraPantallaCompleta({
         { capturadaEn, latitud, longitud },
         puntoNombre
       );
-
-      // Vibración corta como acuse. En un patio ruidoso y con guantes es la
-      // única confirmación que se percibe de verdad.
-      navigator.vibrate?.(40);
-
-      onCapturar(foto, capturadaEn);
+      await entregar(foto, capturadaEn);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo tomar la foto.");
     } finally {
@@ -117,9 +127,37 @@ export function CamaraPantallaCompleta({
     }
   }
 
+  async function desdeArchivo(archivo: File) {
+    setCapturando(true);
+    const capturadaEn = new Date().toISOString();
+    try {
+      const foto = await capturarDeArchivo(
+        archivo,
+        { capturadaEn, latitud, longitud },
+        puntoNombre
+      );
+      await entregar(foto, capturadaEn);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo usar esa imagen.");
+      setCapturando(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
-      {/* ── Encabezado ─────────────────────────────────────────────────── */}
+      <input
+        ref={archivoRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        onChange={(e) => {
+          const archivo = e.target.files?.[0];
+          e.target.value = "";
+          if (archivo) void desdeArchivo(archivo);
+        }}
+      />
+
       <div className="flex items-center gap-3 px-gutter pt-safe">
         <div className="flex min-h-14 flex-1 items-center">
           <p className="truncate text-base font-semibold text-white">
@@ -136,14 +174,12 @@ export function CamaraPantallaCompleta({
         </button>
       </div>
 
-      {/* ── Visor ──────────────────────────────────────────────────────── */}
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
         <video
           ref={videoRef}
+          autoPlay
           playsInline
           muted
-          // playsInline es obligatorio en iOS: sin él, Safari abre el video a
-          // pantalla completa en su propio reproductor y tapa la interfaz.
           className="size-full object-contain"
         />
 
@@ -155,15 +191,19 @@ export function CamaraPantallaCompleta({
         )}
 
         {estado === "error" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center text-white">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center text-white">
             <TriangleAlert className="size-10 text-warn-500" aria-hidden />
-            <p className="text-lg font-semibold">No se pudo abrir la cámara</p>
+            <p className="text-lg font-semibold">No se pudo abrir la cámara en vivo</p>
             <p className="text-white/80">{error}</p>
+            <p className="text-sm text-white/70">
+              Usa el botón de abajo: abre la cámara del teléfono igual.
+            </p>
+            <Button variant="secondary" onClick={() => void intentarAbrir()}>
+              Reintentar visor
+            </Button>
           </div>
         )}
 
-        {/* Vista previa de lo que se va a quemar en la imagen. Coincide con
-            lo que dibuja `capturarDeVideo`, para que no haya sorpresas. */}
         {estado === "lista" && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/60 px-4 py-3">
             <p className="text-sm font-semibold leading-snug text-white">
@@ -179,9 +219,25 @@ export function CamaraPantallaCompleta({
         )}
       </div>
 
-      {/* ── Obturador ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-center px-gutter pb-safe pt-5">
-        <div className="flex h-28 items-center justify-center">
+      <div className="flex flex-col items-center gap-3 px-gutter pb-safe pt-5">
+        {error && estado === "lista" && (
+          <p className="text-center text-sm text-warn-400">{error}</p>
+        )}
+
+        <div className="flex h-28 w-full items-center justify-center gap-8">
+          <button
+            type="button"
+            onClick={() => archivoRef.current?.click()}
+            disabled={capturando}
+            aria-label="Tomar o elegir foto con el teléfono"
+            className="flex flex-col items-center gap-1 text-white/90 disabled:opacity-40"
+          >
+            <span className="flex size-14 items-center justify-center rounded-full border-2 border-white/70">
+              <ImagePlus className="size-6" aria-hidden />
+            </span>
+            <span className="text-xs font-medium">Teléfono</span>
+          </button>
+
           <button
             type="button"
             onClick={disparar}
@@ -195,7 +251,22 @@ export function CamaraPantallaCompleta({
               <span className="size-[58px] rounded-full bg-white" />
             )}
           </button>
+
+          <span className="w-14" aria-hidden />
         </div>
+
+        {estado === "error" && (
+          <Button
+            size="lg"
+            block
+            onClick={() => archivoRef.current?.click()}
+            disabled={capturando}
+            loading={capturando}
+          >
+            {!capturando && <Camera className="size-5" aria-hidden />}
+            Tomar foto ahora
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -27,7 +27,7 @@ const esquema = z.object({
 
 export type ResultadoOcr =
   | { ok: true; datos: Extraccion }
-  | { ok: false; error: string };
+  | { ok: false; error: string; codigo?: "no_configurado" | "imagen_invalida" };
 
 export async function escanearDocumento(entrada: unknown): Promise<ResultadoOcr> {
   // Sesión obligatoria: esta ruta gasta dinero por llamada.
@@ -36,13 +36,20 @@ export async function escanearDocumento(entrada: unknown): Promise<ResultadoOcr>
   if (!isOpenAiConfigured()) {
     return {
       ok: false,
-      error: "El escaneo de documentos todavía no está configurado en este entorno.",
+      error:
+        "El escaneo con IA no está configurado. Se intentará leer el documento en el dispositivo.",
+      codigo: "no_configurado",
     };
   }
 
   const validado = esquema.safeParse(entrada);
   if (!validado.success) {
-    return { ok: false, error: "La imagen no tiene un formato válido." };
+    return {
+      ok: false,
+      error:
+        "La imagen no tiene un formato válido. Usa JPEG o PNG, o toma una foto nueva con la cámara.",
+      codigo: "imagen_invalida",
+    };
   }
 
   const resultado = await extraerDeDocumento(
