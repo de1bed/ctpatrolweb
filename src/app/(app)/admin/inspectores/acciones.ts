@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requerirAdmin } from "@/lib/auth";
+import { clientEnv } from "@/lib/env";
+import { enviarAltaUsuario } from "@/lib/email/mensajes";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
-export type Resultado = { ok: true } | { ok: false; error: string };
+export type Resultado = { ok: true; correoEnviado?: boolean } | { ok: false; error: string };
 
 /**
  * Permisos de campo de un inspector.
@@ -172,5 +174,16 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
   }
 
   revalidatePath("/admin/inspectores");
-  return { ok: true };
+
+  const correo = await enviarAltaUsuario({
+    to: email,
+    nombre,
+    empresa: sesion.cuenta.name,
+    rol: rol === "admin" ? "administrador" : "inspector",
+    email,
+    password,
+    urlEntrar: `${clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/login`,
+  });
+
+  return { ok: true, correoEnviado: correo.ok };
 }

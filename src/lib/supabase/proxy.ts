@@ -1,19 +1,29 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { coincideRuta } from "@/lib/auth-rutas";
 import { clientEnv } from "@/lib/env";
 
 import type { Database } from "./database.types";
 
 /** Rutas que se pueden ver sin sesión. Todo lo demás exige estar dentro. */
-const RUTAS_PUBLICAS = ["/login", "/auth"];
+const RUTAS_PUBLICAS = ["/login", "/registro", "/recuperar", "/auth"];
 
 /** Evidencia compartida por QR: pública a propósito, la abre quien tenga el enlace. */
 const RUTAS_PUBLICAS_PREFIJO = ["/evidencia/"];
 
 function esPublica(pathname: string): boolean {
-  if (RUTAS_PUBLICAS.includes(pathname)) return true;
+  if (RUTAS_PUBLICAS.some((ruta) => coincideRuta(pathname, ruta))) return true;
   return RUTAS_PUBLICAS_PREFIJO.some((p) => pathname.startsWith(p));
+}
+
+function esPantallaDeAcceso(pathname: string): boolean {
+  if (coincideRuta(pathname, "/login")) return true;
+  if (coincideRuta(pathname, "/registro")) return true;
+  // Pedir el correo de recuperación no tiene sentido si ya hay sesión.
+  // /recuperar/nueva sí: llega del enlace del correo con sesión de recovery.
+  if (pathname === "/recuperar") return true;
+  return false;
 }
 
 /**
@@ -64,7 +74,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && pathname === "/login") {
+  if (user && esPantallaDeAcceso(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

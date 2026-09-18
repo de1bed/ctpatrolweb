@@ -70,7 +70,7 @@ export async function extraerDeDocumento(
       model: modeloVision(),
       // Cero temperatura: transcribir un número no admite creatividad.
       temperature: 0,
-      max_tokens: 500,
+      max_tokens: 350,
       response_format: {
         type: "json_schema",
         json_schema: {

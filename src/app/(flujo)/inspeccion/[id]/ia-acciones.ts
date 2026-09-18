@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { requerirSesion } from "@/lib/auth";
 import { topeLlamadas } from "@/lib/ai/cliente";
+import { notaDelPunto } from "@/lib/ai/contexto";
+import { LADO_VISION_PUNTO, prepararParaVision } from "@/lib/ai/imagen";
 import { analizarPunto, type Analisis } from "@/lib/ai/vision";
 import { isOpenAiConfigured } from "@/lib/env";
 import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
@@ -106,18 +108,32 @@ export async function analizarEvidencia(entrada: unknown): Promise<ResultadoIa> 
     return { ok: false, error: "No se pudo leer la foto." };
   }
 
-  const base64 = Buffer.from(await archivo.arrayBuffer()).toString("base64");
+  const crudo = Buffer.from(await archivo.arrayBuffer());
+  const imagen = await prepararParaVision(
+    crudo,
+    media.mime_type ?? "image/jpeg",
+    LADO_VISION_PUNTO
+  );
 
-  // ── Contexto del punto ──────────────────────────────────────────────────
-  // La pista del catálogo le dice al modelo qué se busca en ESE punto. Sin
-  // ella el análisis es genérico y mucho menos útil.
+  const { data: inspeccion } = await supabase
+    .from("inspections")
+    .select("data")
+    .eq("id", inspeccionId)
+    .maybeSingle();
+
   const pista = buscarPista(media.point_key);
+  const notaInspector = notaDelPunto(
+    inspeccion?.data,
+    media.phase,
+    media.point_key
+  );
 
   const resultado = await analizarPunto({
-    imagenBase64: base64,
-    mimeType: media.mime_type ?? "image/jpeg",
+    imagenBase64: imagen.base64,
+    mimeType: imagen.mimeType,
     puntoNombre: media.point_label ?? media.point_key ?? "Punto de inspección",
     puntoPista: pista,
+    notaInspector,
   });
 
   if (!resultado.ok) return { ok: false, error: resultado.error };

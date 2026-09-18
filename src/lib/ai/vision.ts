@@ -60,6 +60,8 @@ Reglas:
 - Si la foto está borrosa, oscura o muy lejos para juzgar, dilo en calidadImagen y explica en problemaCalidad. Es más útil pedir otra foto que adivinar.
 - Si no hay nada anómalo, dilo con claridad. La mayoría de los puntos salen bien y sobrediagnosticar le hace perder tiempo al inspector.
 - sugerencia es una recomendación, no un dictamen. El inspector califica.
+- observacion: máximo dos frases. indicios: solo lo visible y concreto; lista vacía si no hay.
+- Si el inspector dejó una nota, úsala como pista de dónde mirar. No la copies como si fuera un hallazgo tuyo.
 - Responde en español.`;
 
 export type EntradaAnalisis = {
@@ -68,6 +70,8 @@ export type EntradaAnalisis = {
   mimeType: string;
   puntoNombre: string;
   puntoPista: string;
+  /** Hallazgo que escribió el inspector en este punto, si hay. */
+  notaInspector?: string | null;
 };
 
 export type ResultadoAnalisis =
@@ -85,7 +89,7 @@ export async function analizarPunto(
       // Temperatura baja: se busca consistencia, no creatividad. Dos análisis
       // de la misma foto deben decir lo mismo.
       temperature: 0.1,
-      max_tokens: 600,
+      max_tokens: 400,
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -123,7 +127,7 @@ export async function analizarPunto(
           content: [
             {
               type: "text",
-              text: `Punto de inspección: ${entrada.puntoNombre}\nQué se busca: ${entrada.puntoPista}`,
+              text: textoUsuario(entrada),
             },
             {
               type: "image_url",
@@ -160,6 +164,17 @@ export async function analizarPunto(
   } catch (e) {
     return { ok: false, error: explicarError(e) };
   }
+}
+
+function textoUsuario(entrada: EntradaAnalisis): string {
+  const lineas = [
+    `Punto: ${entrada.puntoNombre}`,
+    `Qué se busca: ${entrada.puntoPista}`,
+  ];
+  if (entrada.notaInspector) {
+    lineas.push(`Nota del inspector: ${entrada.notaInspector}`);
+  }
+  return lineas.join("\n");
 }
 
 /**

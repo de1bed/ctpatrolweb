@@ -1,50 +1,47 @@
 import type { Metadata } from "next";
-import Image from "next/image";
+import Link from "next/link";
+
+import { Alerta } from "@/components/auth/alerta";
+import { MarcoAuth } from "@/components/auth/marco";
 
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Entrar" };
 
-/**
- * Login.
- *
- * En teléfono ocupa la pantalla completa, sin tarjeta ni bordes: en móvil
- * una tarjeta flotando sobre fondo gris se ve como formulario web.
- * De iPad en adelante sí aparece la tarjeta centrada, que es lo que se
- * espera en una pantalla grande.
- */
+const AVISOS: Record<string, string> = {
+  enlace: "Ese enlace ya no es válido. Pide uno nuevo o entra con tu contraseña.",
+};
+
 export default async function LoginPage({
   searchParams,
 }: PageProps<"/login">) {
   const params = await searchParams;
   const volver = typeof params.volver === "string" ? params.volver : undefined;
+  const error =
+    typeof params.error === "string" ? AVISOS[params.error] : undefined;
 
   return (
-    <main className="flex min-h-screen-safe flex-col justify-center bg-surface px-safe sm:bg-surface-sunken">
-      <div className="mx-auto w-full max-w-sm px-6 py-10 sm:max-w-md sm:rounded-3xl sm:border sm:border-line sm:bg-surface sm:px-8 sm:py-10 sm:shadow-[var(--shadow-card)]">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <Image
-            src="/icons/icon-256.png"
-            alt=""
-            width={64}
-            height={64}
-            className="size-16 rounded-2xl"
-            priority
-          />
-          <h1 className="mt-5 text-2xl font-bold tracking-tight text-ink">
-            CTPatrol
-          </h1>
-          <p className="mt-1.5 text-sm text-ink-secondary">
-            Inspecciones de seguridad C-TPAT
-          </p>
+    <MarcoAuth
+      titulo="Entrar"
+      subtitulo="Inspecciones de seguridad C-TPAT"
+      pie={
+        <>
+          ¿Primera vez?{" "}
+          <Link
+            href="/registro"
+            className="font-medium text-brand-600 hover:text-brand-700"
+          >
+            Crea la cuenta de tu empresa
+          </Link>
+        </>
+      }
+    >
+      {error && (
+        <div className="mb-5">
+          <Alerta>{error}</Alerta>
         </div>
-
-        <LoginForm volver={volver} />
-
-        <p className="mt-8 text-center text-sm text-ink-muted">
-          ¿Problemas para entrar? Escribe a tu administrador.
-        </p>
-      </div>
-    </main>
+      )}
+      <LoginForm volver={volver} />
+    </MarcoAuth>
   );
 }

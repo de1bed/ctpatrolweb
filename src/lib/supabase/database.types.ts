@@ -814,6 +814,15 @@ export type Database = {
         }
         Returns: string
       }
+      registrar_empresa: {
+        Args: {
+          p_email: string
+          p_password: string
+          p_full_name: string
+          p_company_name: string
+        }
+        Returns: string
+      }
       verificar_inspeccion: {
         Args: { token: string }
         Returns: {

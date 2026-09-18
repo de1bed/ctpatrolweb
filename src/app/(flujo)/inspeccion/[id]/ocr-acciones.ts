@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requerirSesion } from "@/lib/auth";
 import { extraerDeDocumento, type Extraccion } from "@/lib/ai/ocr";
+import { LADO_VISION_DOCUMENTO, prepararParaVision } from "@/lib/ai/imagen";
 import { isOpenAiConfigured } from "@/lib/env";
 
 /**
@@ -52,10 +53,14 @@ export async function escanearDocumento(entrada: unknown): Promise<ResultadoOcr>
     };
   }
 
-  const resultado = await extraerDeDocumento(
-    validado.data.imagenBase64,
-    validado.data.mimeType
+  const crudo = Buffer.from(validado.data.imagenBase64, "base64");
+  const imagen = await prepararParaVision(
+    crudo,
+    validado.data.mimeType,
+    LADO_VISION_DOCUMENTO
   );
+
+  const resultado = await extraerDeDocumento(imagen.base64, imagen.mimeType);
 
   if (!resultado.ok) return { ok: false, error: resultado.error };
   return { ok: true, datos: resultado.datos };

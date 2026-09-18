@@ -26,8 +26,11 @@ export function AltaUsuario() {
   const [abierto, setAbierto] = useState(false);
   const [pendiente, empezar] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [creado, setCreado] = useState<{ email: string; password: string } | null>(null);
-
+  const [creado, setCreado] = useState<{
+    email: string;
+    password: string;
+    correoEnviado: boolean;
+  } | null>(null);
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState<string>("inspector");
@@ -89,8 +92,9 @@ export function AltaUsuario() {
             <div className="flex items-start gap-2.5 rounded-xl border border-ok-500/40 bg-ok-50 px-4 py-3 text-sm text-ok-700 dark:bg-ok-500/10 dark:text-ok-500">
               <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
-                Cuenta lista. Pásale estos datos y pídele que cambie la
-                contraseña al entrar.
+                {creado.correoEnviado
+                  ? "Cuenta lista. También se enviaron estos datos al correo. Pídele que cambie la contraseña al entrar."
+                  : "Cuenta lista. El correo no se pudo enviar: pásale estos datos y pídele que cambie la contraseña al entrar."}
               </span>
             </div>
 
@@ -212,7 +216,13 @@ export function AltaUsuario() {
                     rol,
                     password,
                   });
-                  if (r.ok) setCreado({ email: email.trim(), password });
+                  if (r.ok) {
+                    setCreado({
+                      email: email.trim(),
+                      password,
+                      correoEnviado: Boolean(r.correoEnviado),
+                    });
+                  }
                   else setError(r.error);
                 })
               }

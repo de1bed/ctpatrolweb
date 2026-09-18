@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requerirSesion } from "@/lib/auth";
+import { enviarReporteAlCerrar } from "@/lib/email/reporte-cierre";
 import { ESQUEMAS, PROYECCIONES } from "@/lib/inspection/esquemas";
 import { FASES_POR_ID } from "@/lib/inspection/fases";
 import { construirFlujo, faseIdDeClave, puedeAbrir } from "@/lib/inspection/flujo";
@@ -214,6 +215,14 @@ export async function guardarFase(
   revalidatePath(`/inspeccion/${inspeccionId}`);
   revalidatePath(`/inspeccion/${inspeccionId}/${clavePaso}`);
   revalidatePath(`/inspeccion/${inspeccionId}/evidencia`);
+
+  if (cerrando) {
+    try {
+      await enviarReporteAlCerrar(inspeccionId);
+    } catch (error) {
+      console.error("No se pudo enviar el reporte al cerrar", error);
+    }
+  }
 
   return { ok: true, siguiente: flujoFinal.siguiente?.clave ?? null };
 }

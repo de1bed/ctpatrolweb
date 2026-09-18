@@ -92,3 +92,25 @@ export function openaiEnv() {
 export function isOpenAiConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
 }
+
+const resendSchema = z.object({
+  RESEND_API_KEY: z.string().min(1, {
+    message: "Falta RESEND_API_KEY. Sin ella no se pueden mandar correos.",
+  }),
+  RESEND_FROM: z
+    .string()
+    .min(1)
+    .default("CTPatrol <inspecciones@vortexlabai.com>"),
+});
+
+/** Credenciales de Resend. Lanza si no están configuradas. */
+export function resendEnv() {
+  return leer(resendSchema, {
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_FROM: process.env.RESEND_FROM,
+  });
+}
+
+export function isResendConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY);
+}

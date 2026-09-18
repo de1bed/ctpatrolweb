@@ -10,7 +10,7 @@ import { calcularResultado } from "@/lib/inspection/resultado";
 import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
 import { capacidadesDe } from "@/lib/inspection/transporte";
 import { createClient } from "@/lib/supabase/server";
-import { clientEnv } from "@/lib/env";
+import { clientEnv, isResendConfigured } from "@/lib/env";
 import QRCode from "qrcode";
 
 import { BarraReporte } from "./barra";
@@ -111,6 +111,14 @@ export default async function ReportePage({
       errorCorrectionLevel: "H",
     });
   }
+
+  const { data: perfil } = await supabase
+    .from("profiles")
+    .select("report_emails")
+    .eq("id", sesion.userId)
+    .maybeSingle();
+
+  const destinosCopia = [...new Set([sesion.email, ...(perfil?.report_emails ?? [])])];
 
   const firmas = datos["firmas"] as
     | {
@@ -438,10 +446,13 @@ export default async function ReportePage({
 
       {inspeccion.status === "completed" && (
         <CompartirReporte
+          inspeccionId={id}
           folio={inspeccion.display_id}
           urlVerificacion={urlVerificacion}
           resultado={resultado.aprobada ? "aprobada" : "rechazada"}
           transportista={inspeccion.customer_name}
+          destinosIniciales={destinosCopia.join(", ")}
+          correoListo={isResendConfigured()}
         />
       )}
     </>

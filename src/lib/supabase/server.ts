@@ -54,6 +54,14 @@ export async function createClient() {
  * bloquea algo que debería permitir, la política está mal — arregla la
  * política, no la brinques.
  */
+export function tryCreateAdminClient() {
+  try {
+    return createAdminClient();
+  } catch {
+    return null;
+  }
+}
+
 export function createAdminClient() {
   const { SUPABASE_SERVICE_ROLE_KEY } = serverEnv();
 

@@ -1,38 +1,46 @@
 "use client";
 
 import { Check, Copy, Mail, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useActionState, useState } from "react";
 
+import { Alerta } from "@/components/auth/alerta";
 import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
+
+import { enviarReportePorCorreo, type EstadoEnvio } from "./acciones";
+
+const inicial: EstadoEnvio = { error: null, enviado: false };
 
 /**
  * Compartir el resultado de la inspección.
  *
- * ── Por qué no manda correos desde el servidor ──────────────────────────────
- *
- * El envío transaccional necesita un proveedor (Resend, SES, SendGrid), un
- * dominio verificado y registros SPF/DKIM. Sin eso, un correo enviado desde
- * el servidor termina en spam, que es peor que no mandarlo: el admin cree
- * que llegó y nadie lo leyó.
- *
- * Mientras tanto esto sí funciona hoy, con lo que el dispositivo ya tiene:
- * el menú nativo de compartir en móvil, y el cliente de correo del usuario
- * en escritorio. El correo sale de la cuenta real del inspector, así que
- * llega y se puede responder.
+ * El envío transaccional sale por Resend (dominio verificado). El menú nativo
+ * y copiar siguen ahí para cuando el inspector quiere mandarlo por WhatsApp
+ * o desde su propio correo.
  */
 export function CompartirReporte({
+  inspeccionId,
   folio,
   urlVerificacion,
   resultado,
   transportista,
+  destinosIniciales,
+  correoListo,
 }: {
+  inspeccionId: string;
   folio: string;
   urlVerificacion: string | null;
   resultado: "aprobada" | "rechazada" | null;
   transportista: string | null;
+  destinosIniciales: string;
+  correoListo: boolean;
 }) {
   const [copiado, setCopiado] = useState(false);
+  const [estado, accion, enviando] = useActionState(
+    enviarReportePorCorreo,
+    inicial
+  );
 
   const asunto = `Inspección C-TPAT ${folio}${
     resultado ? ` · ${resultado === "aprobada" ? "Aprobada" : "Rechazada"}` : ""
@@ -53,14 +61,12 @@ export function CompartirReporte({
     .join("\n");
 
   async function compartir() {
-    // El menú nativo de compartir solo existe en móvil y requiere HTTPS.
-    // En escritorio no está, y por eso siempre hay alternativa visible.
     if (navigator.share) {
       try {
         await navigator.share({ title: asunto, text: cuerpo });
         return;
       } catch {
-        // El usuario canceló el menú. No es un error que valga mensaje.
+        // El usuario canceló el menú.
       }
     }
     await copiar();
@@ -72,38 +78,75 @@ export function CompartirReporte({
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
     } catch {
-      // Sin permiso de portapapeles no hay mucho que hacer; el usuario
-      // siempre puede seleccionar el texto del reporte a mano.
+      // Sin permiso de portapapeles.
     }
   }
 
   return (
-    <div className="no-imprimir mx-auto flex max-w-3xl flex-wrap gap-2 px-gutter pb-6">
-      <Button variant="secondary" onClick={compartir} className="flex-1">
-        <Share2 className="size-4" aria-hidden />
-        Compartir
-      </Button>
+    <div className="no-imprimir mx-auto max-w-3xl px-gutter pb-10">
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={compartir} className="flex-1">
+          <Share2 className="size-4" aria-hidden />
+          Compartir
+        </Button>
 
-      <a
-        href={`mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`}
-        className={cn(
-          "flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl",
-          "border border-line bg-surface-raised px-4 text-base font-medium text-ink",
-          "transition-colors active:bg-surface-sunken"
-        )}
-      >
-        <Mail className="size-4" aria-hidden />
-        Enviar por correo
-      </a>
+        <Button variant="secondary" onClick={copiar} className="flex-1">
+          {copiado ? (
+            <Check className="size-4 text-ok-600" aria-hidden />
+          ) : (
+            <Copy className="size-4" aria-hidden />
+          )}
+          {copiado ? "Copiado" : "Copiar datos"}
+        </Button>
+      </div>
 
-      <Button variant="secondary" onClick={copiar} className="flex-1">
-        {copiado ? (
-          <Check className="size-4 text-ok-600" aria-hidden />
-        ) : (
-          <Copy className="size-4" aria-hidden />
-        )}
-        {copiado ? "Copiado" : "Copiar datos"}
-      </Button>
+      {correoListo ? (
+        <form
+          action={accion}
+          className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4"
+        >
+          <input type="hidden" name="inspeccionId" value={inspeccionId} />
+          {estado.error && <Alerta>{estado.error}</Alerta>}
+          {estado.enviado && (
+            <Alerta tono="ok">El resumen salió hacia esos correos.</Alerta>
+          )}
+          <Field
+            label="Enviar resumen por correo"
+            hint="Separa varios correos con coma. El expediente completo no viaja: viaja el folio y el enlace de verificación."
+          >
+            {(props) => (
+              <Input
+                {...props}
+                name="destinatarios"
+                type="text"
+                required
+                defaultValue={destinosIniciales}
+                placeholder="calidad@empresa.com, cliente@transportista.com"
+                disabled={enviando}
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            )}
+          </Field>
+          <Button type="submit" loading={enviando}>
+            <Mail className="size-4" aria-hidden />
+            {enviando ? "Enviando…" : "Enviar"}
+          </Button>
+        </form>
+      ) : (
+        <a
+          href={`mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`}
+          className={cn(
+            "flex min-h-11 items-center justify-center gap-2 rounded-xl",
+            "border border-line bg-surface-raised px-4 text-base font-medium text-ink"
+          )}
+        >
+          <Mail className="size-4" aria-hidden />
+          Enviar por correo
+        </a>
+      )}
     </div>
   );
 }

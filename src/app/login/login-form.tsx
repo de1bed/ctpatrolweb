@@ -1,8 +1,10 @@
 "use client";
 
-import { AlertCircle, Eye, EyeOff } from "lucide-react";
-import { useActionState, useState } from "react";
+import Link from "next/link";
+import { useActionState } from "react";
 
+import { Alerta } from "@/components/auth/alerta";
+import { CampoPassword } from "@/components/auth/campo-password";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 
@@ -12,21 +14,12 @@ const inicial: EstadoLogin = { error: null };
 
 export function LoginForm({ volver }: { volver?: string }) {
   const [estado, accion, enviando] = useActionState(iniciarSesion, inicial);
-  const [verPassword, setVerPassword] = useState(false);
 
   return (
     <form action={accion} className="flex flex-col gap-5">
       {volver && <input type="hidden" name="volver" value={volver} />}
 
-      {estado.error && (
-        <div
-          role="alert"
-          className="flex items-start gap-2.5 rounded-xl border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700 dark:bg-danger-500/10 dark:text-danger-500"
-        >
-          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>{estado.error}</span>
-        </div>
-      )}
+      {estado.error && <Alerta>{estado.error}</Alerta>}
 
       <Field label="Correo">
         {(props) => (
@@ -50,38 +43,26 @@ export function LoginForm({ volver }: { volver?: string }) {
 
       <Field label="Contraseña">
         {(props) => (
-          <div className="relative">
-            <Input
-              {...props}
-              name="password"
-              type={verPassword ? "text" : "password"}
-              required
-              autoComplete="current-password"
-              placeholder="••••••••"
-              disabled={enviando}
-              className="pr-12"
-            />
-            <button
-              type="button"
-              onClick={() => setVerPassword((v) => !v)}
-              // Con guantes o con prisa, una contraseña se teclea mal seguido.
-              // Poder verla evita el ciclo de fallar y reintentar.
-              aria-label={
-                verPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-              }
-              className="absolute right-1 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-lg text-ink-muted hover:text-ink"
-            >
-              {verPassword ? (
-                <EyeOff className="size-5" aria-hidden />
-              ) : (
-                <Eye className="size-5" aria-hidden />
-              )}
-            </button>
-          </div>
+          <CampoPassword
+            {...props}
+            name="password"
+            autoComplete="current-password"
+            disabled={enviando}
+            required
+          />
         )}
       </Field>
 
-      <Button type="submit" size="lg" block loading={enviando} className="mt-1">
+      <div className="-mt-2 text-right">
+        <Link
+          href="/recuperar"
+          className="text-sm font-medium text-brand-600 hover:text-brand-700"
+        >
+          Olvidé mi contraseña
+        </Link>
+      </div>
+
+      <Button type="submit" size="lg" block loading={enviando}>
         {enviando ? "Entrando…" : "Entrar"}
       </Button>
     </form>

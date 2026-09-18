@@ -4,6 +4,7 @@ import { HardDrive, Languages, LogOut, Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { cerrarSesion } from "@/app/login/actions";
+import { CambiarContrasena } from "./cambiar-password";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
@@ -155,6 +156,8 @@ export function PanelAjustes() {
           </div>
         </Card>
       )}
+
+      <CambiarContrasena />
 
       {/* ── Sesión ───────────────────────────────────────────────────── */}
       <Card className="p-4">

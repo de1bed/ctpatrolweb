@@ -4,7 +4,9 @@ import type { Metadata } from "next";
 import { AppHeader } from "@/components/shell/app-header";
 import { Card } from "@/components/ui/card";
 import { obtenerPermisos, requerirSesion } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 
+import { CorreosReporte } from "./correos-reporte";
 import { PanelAjustes } from "./panel";
 
 export const metadata: Metadata = { title: "Ajustes" };
@@ -18,6 +20,12 @@ const ETIQUETA_ROL: Record<string, string> = {
 export default async function AjustesPage() {
   const sesion = await requerirSesion();
   const permisos = await obtenerPermisos(sesion);
+  const supabase = await createClient();
+  const { data: perfil } = await supabase
+    .from("profiles")
+    .select("report_emails")
+    .eq("id", sesion.userId)
+    .maybeSingle();
 
   // Los permisos se muestran para que el inspector sepa qué puede hacer ANTES
   // de toparse con un botón que no está. Sin esto, "no me deja agregar el
@@ -85,6 +93,8 @@ export default async function AjustesPage() {
               </div>
             </dl>
           </Card>
+
+          <CorreosReporte valorInicial={(perfil?.report_emails ?? []).join("\n")} />
 
           {/* ── Permisos ───────────────────────────────────────────────── */}
           {!sesion.esAdmin && (
