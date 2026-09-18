@@ -34,7 +34,9 @@ const esquema = z.object({
   longitud: z.number().min(-180).max(180).nullable(),
 });
 
-export type ResultadoRegistro = { ok: true } | { ok: false; error: string };
+export type ResultadoRegistro =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
 
 export async function registrarEvidencia(
   entrada: unknown
@@ -58,34 +60,52 @@ export async function registrarEvidencia(
 
   // upsert por (inspection_id, client_id): si un reintento sube dos veces la
   // misma foto, se actualiza la fila en lugar de duplicarla.
-  const { error } = await supabase.from("inspection_media").upsert(
-    {
-      inspection_id: d.inspeccionId,
-      company_account_id: sesion.companyAccountId,
-      kind: d.tipo === "video" ? ("video" as const) : ("photo" as const),
-      duration_seconds: d.duracionSegundos ?? null,
-      phase: d.paso,
-      point_key: d.puntoClave,
-      point_label: d.puntoNombre,
-      client_id: d.clientId,
-      storage_path: d.storagePath,
-      mime_type: d.mimeType,
-      size_bytes: d.tamanoBytes,
-      width: d.ancho,
-      height: d.alto,
-      captured_at: d.capturadaEn,
-      latitude: d.latitud,
-      longitude: d.longitud,
-      upload_status: "uploaded" as const,
-      uploaded_at: new Date().toISOString(),
-    },
-    { onConflict: "inspection_id,client_id" }
-  );
+  const { data, error } = await supabase
+    .from("inspection_media")
+    .upsert(
+      {
+        inspection_id: d.inspeccionId,
+        company_account_id: sesion.companyAccountId,
+        kind: d.tipo === "video" ? ("video" as const) : ("photo" as const),
+        duration_seconds: d.duracionSegundos ?? null,
+        phase: d.paso,
+        point_key: d.puntoClave,
+        point_label: d.puntoNombre,
+        client_id: d.clientId,
+        storage_path: d.storagePath,
+        mime_type: d.mimeType,
+        size_bytes: d.tamanoBytes,
+        width: d.ancho,
+        height: d.alto,
+        captured_at: d.capturadaEn,
+        latitude: d.latitud,
+        longitude: d.longitud,
+        upload_status: "uploaded" as const,
+        uploaded_at: new Date().toISOString(),
+      },
+      { onConflict: "inspection_id,client_id" }
+    )
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     console.error("No se pudo registrar la evidencia", error);
     return { ok: false, error: "No se pudo registrar la evidencia." };
   }
 
-  return { ok: true };
+  if (data?.id) return { ok: true, id: data.id };
+
+  // RLS a veces entrega el upsert sin fila; la buscamos por la llave única.
+  const { data: existente } = await supabase
+    .from("inspection_media")
+    .select("id")
+    .eq("inspection_id", d.inspeccionId)
+    .eq("client_id", d.clientId)
+    .maybeSingle();
+
+  if (!existente?.id) {
+    return { ok: false, error: "No se pudo registrar la evidencia." };
+  }
+
+  return { ok: true, id: existente.id };
 }

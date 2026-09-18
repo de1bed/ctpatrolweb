@@ -72,6 +72,10 @@ export async function analizarEvidencia(entrada: unknown): Promise<ResultadoIa> 
 
   if (!media) return { ok: false, error: "No se encontró la evidencia." };
 
+  if (media.mime_type && !media.mime_type.startsWith("image/")) {
+    return { ok: false, error: "El análisis con IA solo aplica a fotos." };
+  }
+
   // Idempotencia: ya analizada, se devuelve lo guardado.
   if (media.ai_analysis) {
     return {

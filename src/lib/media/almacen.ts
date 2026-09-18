@@ -56,6 +56,8 @@ export type FotoLocal = {
   intentos: number;
   ultimoError: string | null;
   storagePath: string | null;
+  /** UUID de inspection_media. Llega cuando el uploader termina el registro. */
+  mediaId: string | null;
 };
 
 class BaseLocal extends Dexie {
@@ -102,7 +104,10 @@ function base(): BaseLocal {
 }
 
 export async function guardarFoto(
-  foto: Omit<FotoLocal, "estado" | "intentos" | "ultimoError" | "storagePath" | "tipo"> & {
+  foto: Omit<
+    FotoLocal,
+    "estado" | "intentos" | "ultimoError" | "storagePath" | "mediaId" | "tipo"
+  > & {
     tipo?: TipoMedia;
   }
 ): Promise<FotoLocal> {
@@ -113,6 +118,7 @@ export async function guardarFoto(
     intentos: 0,
     ultimoError: null,
     storagePath: null,
+    mediaId: null,
   };
   await base().fotos.put(completa);
   avisarEvidenciaNueva();
@@ -125,6 +131,28 @@ export const EVENTO_EVIDENCIA_NUEVA = "ctpatrol:evidencia-nueva";
 export function avisarEvidenciaNueva() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(EVENTO_EVIDENCIA_NUEVA));
+}
+
+/**
+ * El análisis con IA espera esto: la foto ya está en Storage y ya tiene fila
+ * en inspection_media. Sin el id de esa fila el servidor no puede leerla.
+ */
+export const EVENTO_EVIDENCIA_SUBIDA = "ctpatrol:evidencia-subida";
+
+export type DetalleEvidenciaSubida = {
+  inspeccionId: string;
+  paso: string;
+  puntoClave: string;
+  mediaId: string;
+};
+
+export function avisarEvidenciaSubida(detalle: DetalleEvidenciaSubida) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<DetalleEvidenciaSubida>(EVENTO_EVIDENCIA_SUBIDA, {
+      detail: detalle,
+    })
+  );
 }
 
 export async function fotosDePaso(
@@ -147,7 +175,9 @@ export async function borrarFoto(clientId: string): Promise<void> {
 
 export async function actualizarEstado(
   clientId: string,
-  cambios: Partial<Pick<FotoLocal, "estado" | "intentos" | "ultimoError" | "storagePath">>
+  cambios: Partial<
+    Pick<FotoLocal, "estado" | "intentos" | "ultimoError" | "storagePath" | "mediaId">
+  >
 ): Promise<void> {
   await base().fotos.update(clientId, cambios);
 }

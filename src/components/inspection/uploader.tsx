@@ -7,6 +7,7 @@ import { registrarEvidencia } from "@/app/(flujo)/inspeccion/[id]/media-acciones
 import { cn } from "@/lib/cn";
 import {
   actualizarEstado,
+  avisarEvidenciaSubida,
   EVENTO_EVIDENCIA_NUEVA,
   liberarSubidas,
   pendientesDeSubida,
@@ -246,8 +247,21 @@ async function subirUna(
     await actualizarEstado(foto.clientId, {
       estado: "subida",
       storagePath: ruta,
+      mediaId: registro.id,
       ultimoError: null,
     });
+
+    // La IA necesita el UUID de inspection_media. Hasta aquí la UI solo
+    // tenía el blob local: este evento es lo que dispara el análisis.
+    if (foto.tipo === "foto" && foto.puntoClave) {
+      avisarEvidenciaSubida({
+        inspeccionId: foto.inspeccionId,
+        paso: foto.paso,
+        puntoClave: foto.puntoClave,
+        mediaId: registro.id,
+      });
+    }
+
     return true;
   } catch (e) {
     await actualizarEstado(foto.clientId, {

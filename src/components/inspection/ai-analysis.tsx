@@ -7,11 +7,21 @@ import {
   LoaderCircle,
   Sparkles,
 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { analizarEvidencia } from "@/app/(flujo)/inspeccion/[id]/ia-acciones";
 import { cn } from "@/lib/cn";
 import type { Analisis } from "@/lib/ai/vision";
+import {
+  EVENTO_EVIDENCIA_SUBIDA,
+  type DetalleEvidenciaSubida,
+} from "@/lib/media/almacen";
+
+/**
+ * Evita dos llamadas a OpenAI por la misma foto (Strict Mode, re-renders).
+ * Si el análisis falla se saca del set para poder reintentar.
+ */
+const lanzados = new Set<string>();
 
 /**
  * Análisis de una foto con IA.
@@ -21,34 +31,78 @@ import type { Analisis } from "@/lib/ai/vision";
  * solo, el inspector acabaría firmando el criterio de un modelo que no estuvo
  * ahí ni puede tocar la unidad.
  *
- * Se dispara a mano y no automáticamente: cada análisis cuesta dinero, y en
- * la mayoría de los puntos el inspector ya sabe lo que ve. Se usa donde hay
- * duda, que es donde aporta.
+ * Se dispara solo cuando la foto ya está en Storage. El servidor es
+ * idempotente: recargar o volver al punto no vuelve a gastar tokens.
  */
 export function AnalisisIA({
   inspeccionId,
+  puntoClave,
   mediaId,
   analisisPrevio,
 }: {
   inspeccionId: string;
+  puntoClave: string;
   /** Id de la fila de evidencia. Null mientras la foto no se haya subido. */
   mediaId: string | null;
   analisisPrevio?: Analisis | null;
 }) {
   const [pendiente, empezar] = useTransition();
+  const [id, setId] = useState<string | null>(mediaId);
   const [analisis, setAnalisis] = useState<Analisis | null>(
     analisisPrevio ?? null
   );
   const [error, setError] = useState<string | null>(null);
 
-  // Sin foto subida no hay nada que analizar: el servidor necesita leerla de
-  // Storage, y todavía vive solo en el dispositivo.
-  if (!mediaId) {
-    return (
-      <p className="mt-2 text-xs text-ink-muted">
-        El análisis con IA estará disponible cuando la foto termine de subir.
-      </p>
-    );
+  useEffect(() => {
+    if (mediaId) setId(mediaId);
+  }, [mediaId]);
+
+  useEffect(() => {
+    function alSubir(e: Event) {
+      const detalle = (e as CustomEvent<DetalleEvidenciaSubida>).detail;
+      if (
+        detalle.inspeccionId !== inspeccionId ||
+        detalle.puntoClave !== puntoClave
+      ) {
+        return;
+      }
+      setId(detalle.mediaId);
+    }
+
+    window.addEventListener(EVENTO_EVIDENCIA_SUBIDA, alSubir);
+    return () => window.removeEventListener(EVENTO_EVIDENCIA_SUBIDA, alSubir);
+  }, [inspeccionId, puntoClave]);
+
+  useEffect(() => {
+    if (!id || analisis) return;
+    if (lanzados.has(id)) return;
+    lanzados.add(id);
+
+    empezar(async () => {
+      setError(null);
+      const r = await analizarEvidencia({ inspeccionId, mediaId: id });
+      if (r.ok) {
+        setAnalisis(r.analisis);
+      } else {
+        lanzados.delete(id);
+        setError(r.error);
+      }
+    });
+  }, [id, analisis, inspeccionId, empezar]);
+
+  function reintentar() {
+    if (!id) return;
+    lanzados.delete(id);
+    lanzados.add(id);
+    empezar(async () => {
+      setError(null);
+      const r = await analizarEvidencia({ inspeccionId, mediaId: id });
+      if (r.ok) setAnalisis(r.analisis);
+      else {
+        lanzados.delete(id);
+        setError(r.error);
+      }
+    });
   }
 
   if (analisis) {
@@ -66,10 +120,8 @@ export function AnalisisIA({
       <div
         className={cn(
           "mt-2.5 rounded-xl border p-3 text-sm",
-          tono === "ok" &&
-            "border-ok-500/40 bg-ok-50 dark:bg-ok-500/10",
-          tono === "warn" &&
-            "border-warn-500/40 bg-warn-50 dark:bg-warn-500/10",
+          tono === "ok" && "border-ok-500/40 bg-ok-50 dark:bg-ok-500/10",
+          tono === "warn" && "border-warn-500/40 bg-warn-50 dark:bg-warn-500/10",
           tono === "danger" &&
             "border-danger-500/40 bg-danger-50 dark:bg-danger-500/10"
         )}
@@ -121,6 +173,15 @@ export function AnalisisIA({
     );
   }
 
+  if (!id) {
+    return (
+      <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted">
+        <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden />
+        Subiendo… la IA analizará la foto al terminar.
+      </p>
+    );
+  }
+
   return (
     <div className="mt-2">
       {error && (
@@ -129,26 +190,21 @@ export function AnalisisIA({
         </p>
       )}
 
-      <button
-        type="button"
-        disabled={pendiente}
-        onClick={() =>
-          empezar(async () => {
-            setError(null);
-            const r = await analizarEvidencia({ inspeccionId, mediaId });
-            if (r.ok) setAnalisis(r.analisis);
-            else setError(r.error);
-          })
-        }
-        className="flex items-center gap-1.5 text-sm font-medium text-brand-600 disabled:opacity-50"
-      >
-        {pendiente ? (
-          <LoaderCircle className="size-4 animate-spin" aria-hidden />
-        ) : (
+      {error && !pendiente ? (
+        <button
+          type="button"
+          onClick={reintentar}
+          className="flex items-center gap-1.5 text-sm font-medium text-brand-600"
+        >
           <Sparkles className="size-4" aria-hidden />
-        )}
-        {pendiente ? "Analizando…" : "Analizar con IA"}
-      </button>
+          Reintentar análisis
+        </button>
+      ) : (
+        <p className="flex items-center gap-1.5 text-sm font-medium text-brand-600">
+          <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden />
+          Analizando foto…
+        </p>
+      )}
     </div>
   );
 }

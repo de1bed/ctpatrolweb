@@ -18,7 +18,14 @@ import {
   type PuntoInspeccion,
 } from "@/lib/inspection/puntos";
 import { guiaDe } from "@/lib/inspection/guias";
-import { borrarFoto, fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
+import {
+  borrarFoto,
+  EVENTO_EVIDENCIA_SUBIDA,
+  fotosDePaso,
+  guardarFoto,
+  type DetalleEvidenciaSubida,
+  type FotoLocal,
+} from "@/lib/media/almacen";
 import type { FotoCapturada } from "@/lib/media/camara";
 import type { Analisis } from "@/lib/ai/vision";
 
@@ -116,6 +123,30 @@ export function FaseVisual(
       vivo = false;
     };
   }, [props.inspeccionId, props.clavePaso]);
+
+  // El uploader escribe mediaId en IndexedDB; aquí el estado de React se
+  // queda atrás si no escuchamos. Sin este id el análisis nunca arranca.
+  useEffect(() => {
+    function alSubir(e: Event) {
+      const detalle = (e as CustomEvent<DetalleEvidenciaSubida>).detail;
+      if (detalle.inspeccionId !== props.inspeccionId) return;
+      setFotos((prev) => {
+        const actual = prev[detalle.puntoClave];
+        if (!actual) return prev;
+        return {
+          ...prev,
+          [detalle.puntoClave]: {
+            ...actual,
+            mediaId: detalle.mediaId,
+            estado: "subida",
+          },
+        };
+      });
+    }
+
+    window.addEventListener(EVENTO_EVIDENCIA_SUBIDA, alSubir);
+    return () => window.removeEventListener(EVENTO_EVIDENCIA_SUBIDA, alSubir);
+  }, [props.inspeccionId]);
 
   // Las URLs se DERIVAN de las fotos, no son estado aparte: calcularlas en un
   // efecto y guardarlas con setState provoca un render extra en cada cambio.
@@ -431,12 +462,24 @@ export function FaseVisual(
                           se marcó como "no aplica". */}
                       {!estado.noAplica && (fotoLocal || urlFoto) && (
                         <AnalisisIA
+                          key={
+                            fotoLocal?.clientId ??
+                            props.evidenciaSubida?.[punto.clave]?.id ??
+                            punto.clave
+                          }
                           inspeccionId={props.inspeccionId}
-                          mediaId={props.evidenciaSubida?.[punto.clave]?.id ?? null}
+                          puntoClave={punto.clave}
+                          mediaId={
+                            fotoLocal
+                              ? (fotoLocal.mediaId ?? null)
+                              : (props.evidenciaSubida?.[punto.clave]?.id ??
+                                null)
+                          }
                           analisisPrevio={
-                            (props.evidenciaSubida?.[punto.clave]?.analisis as
-                              | Analisis
-                              | null) ?? null
+                            fotoLocal
+                              ? null
+                              : ((props.evidenciaSubida?.[punto.clave]
+                                  ?.analisis as Analisis | null) ?? null)
                           }
                         />
                       )}
