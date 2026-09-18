@@ -70,12 +70,11 @@ export async function guardarPermisos(entrada: unknown): Promise<Resultado> {
 }
 
 /**
- * Activa o desactiva a un usuario.
+ * Quita o reintegra a alguien del equipo.
  *
- * No se borra: un inspector desactivado sigue apareciendo como autor de sus
- * inspecciones históricas, y borrarlo dejaría expedientes sin firmante. Al
- * desactivarlo, `obtenerSesion` deja de reconocerlo y su sesión abierta deja
- * de funcionar en la siguiente petición.
+ * No se borra el usuario: sigue apareciendo como autor de sus inspecciones.
+ * Borrarlo dejaría expedientes sin firmante. Al quitarlo, `obtenerSesion`
+ * deja de reconocerlo y ya no entra.
  */
 export async function cambiarActivo(
   profileId: string,
@@ -84,7 +83,7 @@ export async function cambiarActivo(
   const sesion = await requerirAdmin();
 
   if (profileId === sesion.userId) {
-    return { ok: false, error: "No puedes desactivarte a ti mismo." };
+    return { ok: false, error: "No puedes quitarte a ti mismo del equipo." };
   }
 
   const supabase = await createClient();
@@ -134,8 +133,10 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
     admin = null;
   }
 
+  let userId: string | null = null;
+
   if (admin) {
-    const { error } = await admin.auth.admin.createUser({
+    const { data, error } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -153,6 +154,7 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
       console.error("No se pudo crear el usuario", error);
       return { ok: false, error: "No se pudo crear el usuario." };
     }
+    userId = data.user?.id ?? null;
   } else {
     // Sin service role: el RPC SECURITY DEFINER crea el usuario en Auth
     // con la cuenta del admin que está pidiendo el alta.
@@ -188,6 +190,25 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
 
   if (!correo.ok) {
     console.error("No se pudo enviar la invitación", correo.error);
+  }
+
+  if (admin) {
+    if (!userId) {
+      const { data } = await admin.auth.admin.listUsers({ perPage: 200 });
+      userId =
+        data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+          ?.id ?? null;
+    }
+    if (userId) {
+      await admin.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          company_account_id: sesion.companyAccountId,
+          role: rol,
+          full_name: nombre,
+          invite_email_sent: correo.ok,
+        },
+      });
+    }
   }
 
   return {

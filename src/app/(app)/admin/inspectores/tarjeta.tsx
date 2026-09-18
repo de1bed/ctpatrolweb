@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertCircle, ChevronDown, Save, ShieldCheck, UserX } from "lucide-react";
+import { AlertCircle, ChevronDown, Save, ShieldCheck, UserMinus, UserPlus } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
+import type { EstadoMiembro } from "@/lib/equipo";
 import type { Tables } from "@/lib/supabase/database.types";
 
 import { cambiarActivo, guardarPermisos } from "./acciones";
@@ -47,14 +48,42 @@ const CATALOGOS = [
  * normalmente ajusta permisos de varios inspectores seguidos, y navegar ida
  * y vuelta por cada uno lo vuelve tedioso.
  */
+const ETIQUETA_ESTADO: Record<
+  EstadoMiembro,
+  { texto: string; clase: string }
+> = {
+  en_equipo: {
+    texto: "En el equipo",
+    clase:
+      "bg-ok-50 text-ok-700 dark:bg-ok-500/10 dark:text-ok-500",
+  },
+  invitacion_enviada: {
+    texto: "Invitación enviada",
+    clase:
+      "bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300",
+  },
+  correo_no_salio: {
+    texto: "Correo no salió",
+    clase:
+      "bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-500",
+  },
+  fuera: {
+    texto: "Fuera del equipo",
+    clase: "bg-surface-sunken text-ink-muted",
+  },
+};
+
 export function TarjetaInspector({
   usuario,
   esYo,
+  estado,
 }: {
   usuario: InspectorConPermisos;
   esYo: boolean;
+  estado: EstadoMiembro;
 }) {
   const [abierta, setAbierta] = useState(false);
+  const [confirmarQuitar, setConfirmarQuitar] = useState(false);
   const [pendiente, empezar] = useTransition();
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -113,11 +142,14 @@ export function TarjetaInspector({
             <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-ink-secondary">
               {usuario.role === "inspector" ? "Inspector" : "Administrador"}
             </span>
-            {!usuario.is_active && (
-              <span className="rounded-full bg-danger-50 px-2 py-0.5 text-xs font-medium text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
-                Desactivado
-              </span>
-            )}
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-xs font-medium",
+                ETIQUETA_ESTADO[estado].clase
+              )}
+            >
+              {ETIQUETA_ESTADO[estado].texto}
+            </span>
           </p>
         </div>
 
@@ -136,6 +168,78 @@ export function TarjetaInspector({
           </button>
         )}
       </div>
+
+      {!esYo && (
+        <div className="border-t border-line px-4 py-3">
+          {confirmarQuitar && usuario.is_active ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-ink">
+                ¿Quitar a {usuario.full_name || usuario.email} del equipo? Ya
+                no podrá entrar. Sus inspecciones se quedan.
+              </p>
+              {error && (
+                <p role="alert" className="text-sm text-danger-600">
+                  {error}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setConfirmarQuitar(false)}
+                >
+                  No quitar
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  loading={pendiente}
+                  onClick={() =>
+                    empezar(async () => {
+                      const r = await cambiarActivo(usuario.id, false);
+                      if (!r.ok) setError(r.error);
+                      else setConfirmarQuitar(false);
+                    })
+                  }
+                >
+                  Quitar del equipo
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              className={
+                usuario.is_active ? "text-danger-600" : "text-ok-700"
+              }
+              loading={pendiente}
+              onClick={() => {
+                if (usuario.is_active) {
+                  setError(null);
+                  setConfirmarQuitar(true);
+                  return;
+                }
+                empezar(async () => {
+                  const r = await cambiarActivo(usuario.id, true);
+                  if (!r.ok) setError(r.error);
+                });
+              }}
+            >
+              {usuario.is_active ? (
+                <UserMinus className="size-4" aria-hidden />
+              ) : (
+                <UserPlus className="size-4" aria-hidden />
+              )}
+              {usuario.is_active ? "Quitar del equipo" : "Volver a agregar"}
+            </Button>
+          )}
+          {error && !confirmarQuitar && (
+            <p role="alert" className="mt-2 text-sm text-danger-600">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ── Permisos ─────────────────────────────────────────────────── */}
       {esInspector && abierta && (
@@ -242,22 +346,6 @@ export function TarjetaInspector({
                 <ShieldCheck className="size-4" aria-hidden />
                 {mensaje}
               </span>
-            )}
-
-            {!esYo && (
-              <Button
-                variant="ghost"
-                className="ml-auto text-danger-600"
-                onClick={() =>
-                  empezar(async () => {
-                    const r = await cambiarActivo(usuario.id, !usuario.is_active);
-                    if (!r.ok) setError(r.error);
-                  })
-                }
-              >
-                <UserX className="size-4" aria-hidden />
-                {usuario.is_active ? "Desactivar" : "Reactivar"}
-              </Button>
             )}
           </div>
         </div>

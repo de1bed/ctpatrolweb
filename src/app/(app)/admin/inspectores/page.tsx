@@ -3,12 +3,15 @@ import type { Metadata } from "next";
 
 import { Card } from "@/components/ui/card";
 import { requerirAdmin } from "@/lib/auth";
+import { estadoDelMiembro } from "@/lib/equipo";
 import { createClient } from "@/lib/supabase/server";
 
 import { AltaUsuario } from "./alta-usuario";
+import { datosAuthDelEquipo } from "./datos-auth";
 import { TarjetaInspector, type InspectorConPermisos } from "./tarjeta";
 
 export const metadata: Metadata = { title: "Inspectores" };
+export const dynamic = "force-dynamic";
 
 export default async function InspectoresPage() {
   const sesion = await requerirAdmin();
@@ -30,6 +33,7 @@ export default async function InspectoresPage() {
 
   if (error) console.error("No se pudieron cargar los usuarios", error);
   const usuarios = (data ?? []) as unknown as InspectorConPermisos[];
+  const auth = await datosAuthDelEquipo(usuarios.map((u) => u.id));
   const activos = usuarios.filter((u) => u.is_active).length;
 
   return (
@@ -40,7 +44,8 @@ export default async function InspectoresPage() {
             Usuarios de {sesion.cuenta.name}
           </h1>
           <p className="text-sm text-ink-secondary">
-            {activos} {activos === 1 ? "activo" : "activos"} de {usuarios.length}
+            {activos} en el equipo · {usuarios.length}{" "}
+            {usuarios.length === 1 ? "usuario" : "usuarios"}
           </p>
         </div>
         <AltaUsuario />
@@ -53,11 +58,22 @@ export default async function InspectoresPage() {
         </Card>
       ) : (
         <ul className="flex flex-col gap-3">
-          {usuarios.map((u) => (
-            <li key={u.id}>
-              <TarjetaInspector usuario={u} esYo={u.id === sesion.userId} />
-            </li>
-          ))}
+          {usuarios.map((u) => {
+            const dato = auth.get(u.id);
+            return (
+              <li key={u.id}>
+                <TarjetaInspector
+                  usuario={u}
+                  esYo={u.id === sesion.userId}
+                  estado={estadoDelMiembro({
+                    activo: u.is_active,
+                    ultimaEntrada: dato?.ultimaEntrada ?? null,
+                    correoEnviado: dato?.correoEnviado ?? null,
+                  })}
+                />
+              </li>
+            );
+          })}
         </ul>
       )}
     </main>
