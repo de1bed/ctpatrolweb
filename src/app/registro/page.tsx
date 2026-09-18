@@ -11,7 +11,7 @@ export default function RegistroPage() {
   return (
     <MarcoAuth
       titulo="Registrar empresa"
-      subtitulo="Tú quedas como administrador. Después das de alta a los inspectores."
+      subtitulo="Tú quedas como administrador. Te mandamos un código al correo para activar la cuenta."
       pie={
         <>
           ¿Ya tienes cuenta?{" "}

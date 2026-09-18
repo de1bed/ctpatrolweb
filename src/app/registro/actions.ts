@@ -3,16 +3,20 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { enviarBienvenida } from "@/lib/email/mensajes";
-import { clientEnv } from "@/lib/env";
+import {
+  enviarCodigoVerificacion,
+  esCorreoYaConfirmado,
+  puedeEnviarVerificacion,
+} from "@/lib/email/verificacion";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * Alta de una empresa nueva.
  *
- * Crea el tenant y al primer administrador. El resto del equipo lo da de
- * alta ese admin desde el panel. El perfil lo materializa el trigger
- * `handle_new_user` a partir del metadata que escribe el RPC.
+ * Crea el tenant y al primer administrador, pero NO inicia sesión: el correo
+ * queda sin confirmar hasta que escriben el código que manda Resend. El
+ * perfil lo materializa el trigger `handle_new_user` a partir del metadata
+ * del RPC.
  */
 
 const esquema = z
@@ -43,7 +47,50 @@ const esquema = z
     path: ["confirmacion"],
   });
 
-export type EstadoRegistro = { error: string | null };
+export type EstadoRegistro = {
+  error: string | null;
+  pendiente?: boolean;
+  reenviado?: boolean;
+  email?: string;
+  nombre?: string;
+  empresa?: string;
+};
+
+const esquemaReenvio = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Escribe tu correo")
+    .email("Ese correo no parece válido"),
+  nombre: z.string().trim().optional(),
+  empresa: z.string().trim().optional(),
+});
+
+const esquemaCodigo = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Escribe tu correo")
+    .email("Ese correo no parece válido"),
+  codigo: z
+    .string()
+    .trim()
+    .regex(/^\d{6,8}$/, "El código tiene 6 u 8 dígitos"),
+});
+
+function pendiente(
+  datos: { email: string; nombre?: string; empresa?: string },
+  extra?: { reenviado?: boolean; error?: string | null }
+): EstadoRegistro {
+  return {
+    error: extra?.error ?? null,
+    pendiente: true,
+    reenviado: extra?.reenviado,
+    email: datos.email,
+    nombre: datos.nombre,
+    empresa: datos.empresa,
+  };
+}
 
 export async function registrarEmpresa(
   _anterior: EstadoRegistro,
@@ -61,6 +108,13 @@ export async function registrarEmpresa(
     return { error: datos.error.issues[0].message };
   }
 
+  if (!puedeEnviarVerificacion()) {
+    return {
+      error:
+        "No se pudo enviar el código de verificación. Inténtalo más tarde.",
+    };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("registrar_empresa", {
     p_email: datos.data.email,
@@ -69,33 +123,97 @@ export async function registrarEmpresa(
     p_company_name: datos.data.empresa,
   });
 
+  const destino = {
+    email: datos.data.email,
+    nombre: datos.data.nombre,
+    empresa: datos.data.empresa,
+  };
+
   if (error) {
     if (error.message.includes("Ya existe")) {
+      const envio = await enviarCodigoVerificacion(destino);
+      if (envio.ok) return pendiente(destino);
+      if (esCorreoYaConfirmado(envio.error)) {
+        return {
+          error:
+            "Ya existe un usuario con ese correo. Entra o recupera tu contraseña.",
+        };
+      }
       return {
-        error: "Ya existe un usuario con ese correo. Entra o recupera tu contraseña.",
+        error:
+          "No se pudo enviar el código de verificación. Inténtalo de nuevo en unos minutos.",
       };
     }
     console.error("No se pudo registrar la empresa", error);
     return { error: error.message || "No se pudo crear la cuenta." };
   }
 
-  const { error: errorLogin } = await supabase.auth.signInWithPassword({
-    email: datos.data.email,
-    password: datos.data.password,
-  });
-
-  if (errorLogin) {
+  const envio = await enviarCodigoVerificacion(destino);
+  if (!envio.ok) {
     return {
-      error: "La cuenta se creó, pero no se pudo entrar. Prueba desde Iniciar sesión.",
+      error:
+        "La cuenta se creó, pero no se pudo enviar el código. Espera un minuto e inténtalo de nuevo.",
     };
   }
 
-  await enviarBienvenida({
-    to: datos.data.email,
-    nombre: datos.data.nombre,
-    empresa: datos.data.empresa,
-    urlEntrar: `${clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/login`,
+  return pendiente(destino);
+}
+
+export async function reenviarVerificacion(
+  _anterior: EstadoRegistro,
+  formData: FormData
+): Promise<EstadoRegistro> {
+  const datos = esquemaReenvio.safeParse({
+    email: formData.get("email"),
+    nombre: formData.get("nombre") || undefined,
+    empresa: formData.get("empresa") || undefined,
   });
+
+  if (!datos.success) {
+    return { error: datos.error.issues[0].message };
+  }
+
+  const envio = await enviarCodigoVerificacion(datos.data);
+  if (!envio.ok && esCorreoYaConfirmado(envio.error)) {
+    return {
+      error: "Ese correo ya está confirmado. Entra con tu contraseña.",
+    };
+  }
+
+  // Siempre "pendiente": no confirmamos si el correo existe.
+  return pendiente(datos.data, { reenviado: true });
+}
+
+export async function confirmarCorreo(
+  _anterior: EstadoRegistro,
+  formData: FormData
+): Promise<EstadoRegistro> {
+  const email = String(formData.get("email") ?? "");
+  const nombre = String(formData.get("nombre") ?? "") || undefined;
+  const empresa = String(formData.get("empresa") ?? "") || undefined;
+  const contexto = { email, nombre, empresa };
+
+  const datos = esquemaCodigo.safeParse({
+    email: formData.get("email"),
+    codigo: String(formData.get("codigo") ?? "").replace(/\s/g, ""),
+  });
+
+  if (!datos.success) {
+    return pendiente(contexto, { error: datos.error.issues[0].message });
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({
+    email: datos.data.email,
+    token: datos.data.codigo,
+    type: "invite",
+  });
+
+  if (error) {
+    return pendiente(contexto, {
+      error: "Ese código no es válido o ya caducó. Pide uno nuevo.",
+    });
+  }
 
   redirect("/");
 }

@@ -34,6 +34,7 @@ export async function obtenerSesion(): Promise<Sesion | null> {
   } = await supabase.auth.getUser();
 
   if (!user) return null;
+  if (!user.email_confirmed_at) return null;
 
   // OJO: el select va en UNA sola cadena literal, sin concatenar.
   // supabase-js deduce los tipos del resultado analizando este texto en

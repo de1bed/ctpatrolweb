@@ -4,6 +4,7 @@ import { CorreoAltaUsuario } from "@/emails/alta-usuario";
 import { CorreoBienvenida } from "@/emails/bienvenida";
 import { CorreoRecuperar } from "@/emails/recuperar";
 import { CorreoReporte } from "@/emails/reporte";
+import { CorreoVerificar } from "@/emails/verificar";
 
 import { enviarCorreo, type ResultadoCorreo } from "./enviar";
 
@@ -50,6 +51,26 @@ export function enviarBienvenida(opts: {
       />
     ),
     idempotencyKey: `bienvenida/${opts.to}`,
+  });
+}
+
+export function enviarVerificacion(opts: {
+  to: string;
+  nombre: string;
+  empresa: string;
+  codigo: string;
+}): Promise<ResultadoCorreo> {
+  return enviarCorreo({
+    to: opts.to,
+    subject: `Tu código de CTPatrol es ${opts.codigo}`,
+    react: (
+      <CorreoVerificar
+        nombre={opts.nombre}
+        empresa={opts.empresa}
+        codigo={opts.codigo}
+      />
+    ),
+    idempotencyKey: `verificar-correo/${opts.to}/${opts.codigo}`.slice(0, 256),
   });
 }
 

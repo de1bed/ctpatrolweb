@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { rutaInternaSegura } from "@/lib/auth-rutas";
 import { enviarRecuperacion } from "@/lib/email/mensajes";
+import { enviarCodigoVerificacion } from "@/lib/email/verificacion";
 import { clientEnv, isResendConfigured } from "@/lib/env";
 import { createClient, tryCreateAdminClient } from "@/lib/supabase/server";
 
@@ -30,7 +31,21 @@ const esquema = z.object({
   volver: z.string().optional(),
 });
 
-export type EstadoLogin = { error: string | null };
+export type EstadoLogin = {
+  error: string | null;
+  sinConfirmar?: boolean;
+  reenviado?: boolean;
+  email?: string;
+};
+
+function noConfirmado(email: string): EstadoLogin {
+  return {
+    error:
+      "Confirma tu correo para entrar. Te mandamos un código: escríbelo abajo o pide uno nuevo.",
+    sinConfirmar: true,
+    email,
+  };
+}
 
 export async function iniciarSesion(
   _anterior: EstadoLogin,
@@ -53,10 +68,24 @@ export async function iniciarSesion(
   });
 
   if (error) {
+    const codigo = "code" in error ? String(error.code) : "";
+    const texto = error.message.toLowerCase();
+    if (codigo === "email_not_confirmed" || texto.includes("not confirmed")) {
+      return noConfirmado(datos.data.email);
+    }
     // Mensaje genérico a propósito: distinguir "no existe ese correo" de
     // "contraseña incorrecta" le regala a un atacante la lista de quién
     // tiene cuenta. Al usuario legítimo no le sirve de nada la distinción.
     return { error: "Correo o contraseña incorrectos." };
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.email_confirmed_at) {
+    await supabase.auth.signOut();
+    return noConfirmado(datos.data.email);
   }
 
   redirect(rutaInternaSegura(datos.data.volver));
@@ -75,6 +104,31 @@ const esquemaRecuperar = z.object({
     .min(1, "Escribe tu correo")
     .email("Ese correo no parece válido"),
 });
+
+export async function pedirVerificacion(
+  _anterior: EstadoLogin,
+  formData: FormData
+): Promise<EstadoLogin> {
+  const datos = esquemaRecuperar.safeParse({
+    email: formData.get("email"),
+  });
+
+  if (!datos.success) {
+    return {
+      error: datos.error.issues[0].message,
+      sinConfirmar: true,
+      email: String(formData.get("email") ?? ""),
+    };
+  }
+
+  await enviarCodigoVerificacion({ email: datos.data.email });
+  return {
+    error: null,
+    sinConfirmar: true,
+    email: datos.data.email,
+    reenviado: true,
+  };
+}
 
 export type EstadoRecuperar = { error: string | null; enviado: boolean };
 

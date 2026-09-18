@@ -61,8 +61,10 @@ export async function updateSession(request: NextRequest) {
   // getUser y no getSession: getUser verifica el token contra el servidor de
   // auth. getSession solo lee la cookie, y una cookie se puede falsificar.
   const {
-    data: { user },
+    data: { user: crudo },
   } = await supabase.auth.getUser();
+
+  const user = crudo?.email_confirmed_at ? crudo : null;
 
   const { pathname } = request.nextUrl;
 

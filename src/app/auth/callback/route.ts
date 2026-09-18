@@ -5,7 +5,8 @@ import { rutaInternaSegura } from "@/lib/auth-rutas";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Intercambia el código de Supabase (confirmación, recovery) por una sesión.
+ * Intercambia el código de Supabase (confirmación de correo, recovery) por
+ * una sesión.
  *
  * El enlace del correo aterriza aquí. Sin esta ruta, el usuario ve un 404
  * y la cookie de sesión nunca se escribe.
