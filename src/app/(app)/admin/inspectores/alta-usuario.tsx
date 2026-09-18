@@ -30,6 +30,7 @@ export function AltaUsuario() {
     email: string;
     password: string;
     correoEnviado: boolean;
+    errorCorreo?: string;
   } | null>(null);
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
@@ -93,8 +94,8 @@ export function AltaUsuario() {
               <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
                 {creado.correoEnviado
-                  ? "Cuenta lista. También se enviaron estos datos al correo. Pídele que cambie la contraseña al entrar."
-                  : "Cuenta lista. El correo no se pudo enviar: pásale estos datos y pídele que cambie la contraseña al entrar."}
+                  ? "Le enviamos la invitación a su correo, con estos datos. Pídele que cambie la contraseña al entrar."
+                  : `La cuenta quedó lista, pero el correo no salió${creado.errorCorreo ? ` (${creado.errorCorreo})` : ""}. Pásale estos datos en mano.`}
               </span>
             </div>
 
@@ -221,13 +222,14 @@ export function AltaUsuario() {
                       email: email.trim(),
                       password,
                       correoEnviado: Boolean(r.correoEnviado),
+                      errorCorreo: r.errorCorreo,
                     });
                   }
                   else setError(r.error);
                 })
               }
             >
-              Crear usuario
+              Crear e invitar
             </Button>
           </div>
         )}

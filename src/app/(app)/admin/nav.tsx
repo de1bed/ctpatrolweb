@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, BookUser, ClipboardList, Users } from "lucide-react";
+import { BarChart3, BookUser, CalendarDays, ClipboardList, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 
 const SECCIONES = [
   { href: "/admin", etiqueta: "Resumen", icono: BarChart3 },
+  { href: "/admin/calendario", etiqueta: "Calendario", icono: CalendarDays },
   { href: "/admin/inspecciones", etiqueta: "Inspecciones", icono: ClipboardList },
   { href: "/admin/inspectores", etiqueta: "Inspectores", icono: Users },
   { href: "/admin/catalogos", etiqueta: "Catálogos", icono: BookUser },

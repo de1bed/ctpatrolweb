@@ -6,16 +6,17 @@ import { useState } from "react";
 import { FormularioProgramar } from "@/components/calendario/formulario-programar";
 import { Button } from "@/components/ui/button";
 
-/**
- * Alta de inspección desde el listado.
- *
- * El formulario vive aparte porque el calendario abre el mismo diálogo
- * con la fecha ya puesta: un solo flujo, dos entradas.
- */
-export function NuevaAsignada({
+/** Abre el alta con fecha e inspector ya puestos, desde un día del calendario. */
+export function BotonProgramar({
   inspectores,
+  fechaInicial,
+  inspectorInicial,
+  etiqueta = "Programar este día",
 }: {
   inspectores: { id: string; nombre: string }[];
+  fechaInicial?: string;
+  inspectorInicial?: string;
+  etiqueta?: string;
 }) {
   const [abierto, setAbierto] = useState(false);
 
@@ -23,12 +24,14 @@ export function NuevaAsignada({
     <>
       <Button onClick={() => setAbierto(true)}>
         <Plus className="size-5" aria-hidden />
-        Nueva inspección
+        {etiqueta}
       </Button>
       <FormularioProgramar
         inspectores={inspectores}
         abierto={abierto}
         onCerrar={() => setAbierto(false)}
+        fechaInicial={fechaInicial}
+        inspectorInicial={inspectorInicial}
       />
     </>
   );

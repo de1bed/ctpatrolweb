@@ -8,7 +8,7 @@ import { clientEnv } from "@/lib/env";
 import { enviarAltaUsuario } from "@/lib/email/mensajes";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
-export type Resultado = { ok: true; correoEnviado?: boolean } | { ok: false; error: string };
+export type Resultado = { ok: true; correoEnviado?: boolean; errorCorreo?: string } | { ok: false; error: string };
 
 /**
  * Permisos de campo de un inspector.
@@ -183,7 +183,16 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
     email,
     password,
     urlEntrar: `${clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/login`,
+    invitador: sesion.nombre,
   });
 
-  return { ok: true, correoEnviado: correo.ok };
+  if (!correo.ok) {
+    console.error("No se pudo enviar la invitación", correo.error);
+  }
+
+  return {
+    ok: true,
+    correoEnviado: correo.ok,
+    errorCorreo: correo.ok ? undefined : correo.error,
+  };
 }

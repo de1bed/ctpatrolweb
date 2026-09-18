@@ -16,10 +16,11 @@ export function enviarAltaUsuario(opts: {
   email: string;
   password: string;
   urlEntrar: string;
+  invitador: string;
 }): Promise<ResultadoCorreo> {
   return enviarCorreo({
     to: opts.to,
-    subject: `Tu cuenta de ${opts.empresa} en CTPatrol`,
+    subject: `${opts.invitador} te invitó al equipo de ${opts.empresa} en CTPatrol`,
     react: (
       <CorreoAltaUsuario
         nombre={opts.nombre}
@@ -28,9 +29,10 @@ export function enviarAltaUsuario(opts: {
         email={opts.email}
         password={opts.password}
         urlEntrar={opts.urlEntrar}
+        invitador={opts.invitador}
       />
     ),
-    idempotencyKey: `alta-usuario/${opts.email}`,
+    idempotencyKey: `alta-usuario/${opts.email}/${Date.now()}`.slice(0, 256),
   });
 }
 

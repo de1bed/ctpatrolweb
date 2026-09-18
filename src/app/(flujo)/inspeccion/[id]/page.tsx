@@ -6,6 +6,7 @@ import { ControlesPausa } from "@/components/inspection/pause-controls";
 import { PhaseList } from "@/components/inspection/phase-list";
 import { ProgressBar } from "@/components/inspection/progress-bar";
 import { StatusBadge } from "@/components/inspection/status-badge";
+import { Bitacora } from "@/components/inspection/bitacora";
 import { Card } from "@/components/ui/card";
 import { requerirSesion } from "@/lib/auth";
 import { construirFlujo } from "@/lib/inspection/flujo";
@@ -174,6 +175,8 @@ export default async function InspeccionPage({
         <div className="mt-7">
           <PhaseList flujo={flujo} inspeccionId={inspeccion.id} />
         </div>
+
+        <Bitacora inspeccionId={inspeccion.id} />
       </main>
 
       {/* ── Acción principal, fija abajo ─────────────────────────────────

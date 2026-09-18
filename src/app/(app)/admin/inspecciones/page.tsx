@@ -40,7 +40,7 @@ export default async function AdminInspeccionesPage({
   let consulta = supabase
     .from("inspections")
     .select(
-      "id, display_id, status, customer_name, tractor_number, driver_name, updated_at, completed_at, scheduled_for, passed, findings_count, assigned_to, profiles!inspections_assigned_to_fkey(id, full_name)"
+      "id, display_id, status, customer_name, tractor_number, driver_name, updated_at, completed_at, scheduled_for, passed, findings_count, assigned_to, verification_token, verification_revoked_at, profiles!inspections_assigned_to_fkey(id, full_name)"
     )
     .order("updated_at", { ascending: false })
     .limit(100);
@@ -87,7 +87,15 @@ export default async function AdminInspeccionesPage({
         <h1 className="text-xl font-bold tracking-tight text-ink">
           Inspecciones
         </h1>
-        <NuevaAsignada inspectores={listaInspectores} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin/calendario"
+            className="flex min-h-11 items-center rounded-xl border border-line px-3.5 text-sm font-medium text-ink-secondary"
+          >
+            Calendario
+          </Link>
+          <NuevaAsignada inspectores={listaInspectores} />
+        </div>
       </div>
 
       {/* Búsqueda por GET: la URL queda compartible y funciona sin JS. */}

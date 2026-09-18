@@ -1,5 +1,6 @@
 import { subDays } from "date-fns";
 import {
+  CalendarDays,
   CheckCircle2,
   ClipboardList,
   PauseCircle,
@@ -153,6 +154,26 @@ export default async function AdminResumenPage() {
         })}
       </div>
 
+      <Link href="/admin/calendario" className="mt-3 block">
+        <Card interactive className="flex items-center gap-3 p-4 hover:border-line-strong">
+          <span
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-xl",
+              tonos.brand
+            )}
+          >
+            <CalendarDays className="size-5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="font-semibold text-ink">Calendario</p>
+            <p className="text-sm text-ink-secondary">
+              Precarga una inspección, asígnala y queda en la agenda del
+              inspector.
+            </p>
+          </div>
+        </Card>
+      </Link>
+
       {/* ── Calidad ────────────────────────────────────────────────────── */}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Card className="p-4">
@@ -211,12 +232,20 @@ export default async function AdminResumenPage() {
           <h2 className="text-xl font-bold tracking-tight text-ink">
             Actividad reciente
           </h2>
-          <Link
-            href="/admin/inspecciones"
-            className="text-sm font-medium text-brand-600"
-          >
-            Ver todas
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/calendario"
+              className="text-sm font-medium text-brand-600"
+            >
+              Calendario
+            </Link>
+            <Link
+              href="/admin/inspecciones"
+              className="text-sm font-medium text-brand-600"
+            >
+              Ver todas
+            </Link>
+          </div>
         </div>
 
         {recientes.length === 0 ? (

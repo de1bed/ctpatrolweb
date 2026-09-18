@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { Ban, ExternalLink, ShieldAlert, ShieldCheck, UserCog } from "lucide-react";
 import Link from "next/link";
@@ -9,11 +9,13 @@ import { useState, useTransition } from "react";
 import { StatusBadge } from "@/components/inspection/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Select, Textarea } from "@/components/ui/field";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { aDatetimeLocal } from "@/lib/calendario";
 import { cn } from "@/lib/cn";
 import type { Database } from "@/lib/supabase/database.types";
 
-import { asignarInspeccion, cancelarInspeccion } from "./acciones";
+import { asignarInspeccion, cancelarInspeccion, programarInspeccion } from "./acciones";
+import { RevocarQr } from "@/app/(flujo)/inspeccion/[id]/reporte/revocar";
 
 export type InspeccionAdmin = {
   id: string;
@@ -28,6 +30,8 @@ export type InspeccionAdmin = {
   passed: boolean | null;
   findings_count: number;
   assigned_to: string | null;
+  verification_token: string | null;
+  verification_revoked_at: string | null;
   profiles: { id: string; full_name: string } | null;
 };
 
@@ -82,6 +86,15 @@ export function FilaInspeccion({
             {inspeccion.driver_name && ` · ${inspeccion.driver_name}`}
           </p>
           <p className="mt-1 text-xs text-ink-muted">
+            {inspeccion.scheduled_for && (
+              <>
+                Programada{" "}
+                {format(new Date(inspeccion.scheduled_for), "d MMM, HH:mm", {
+                  locale: es,
+                })}
+                {" · "}
+              </>
+            )}
             {formatDistanceToNow(
               new Date(inspeccion.completed_at ?? inspeccion.updated_at),
               { addSuffix: true, locale: es }
@@ -147,6 +160,43 @@ export function FilaInspeccion({
             </Button>
           </div>
 
+          <Field
+            label="En el calendario"
+            hint="Si le pones fecha, aparece en el calendario del inspector."
+            className="mt-3"
+          >
+            {(p) => (
+              <Input
+                {...p}
+                key={inspeccion.scheduled_for ?? "sin-fecha"}
+                type="datetime-local"
+                disabled={pendiente}
+                defaultValue={
+                  inspeccion.scheduled_for
+                    ? aDatetimeLocal(new Date(inspeccion.scheduled_for))
+                    : ""
+                }
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  if (valor && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(valor)) {
+                    return;
+                  }
+                  empezar(async () => {
+                    setError(null);
+                    const r = await programarInspeccion({
+                      inspeccionId: inspeccion.id,
+                      inspectorId: inspeccion.assigned_to,
+                      programadaPara: valor
+                        ? new Date(valor).toISOString()
+                        : null,
+                    });
+                    if (!r.ok) setError(r.error);
+                  });
+                }}
+              />
+            )}
+          </Field>
+
           {/* Cancelar exige motivo: sin él, meses después nadie sabe por qué
               hay un folio muerto en la numeración. */}
           {cancelando && (
@@ -193,6 +243,14 @@ export function FilaInspeccion({
           )}
         </div>
       )}
+
+      {inspeccion.status === "completed" &&
+        inspeccion.verification_token &&
+        !inspeccion.verification_revoked_at && (
+          <div className="border-t border-line px-4 py-3">
+            <RevocarQr inspeccionId={inspeccion.id} />
+          </div>
+        )}
     </Card>
   );
 }

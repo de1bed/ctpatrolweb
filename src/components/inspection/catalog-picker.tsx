@@ -39,6 +39,7 @@ export function CatalogPicker({
   onSeleccionar,
   ayuda,
   ayudaDetalle,
+  required = true,
 }: {
   tipo: TipoCatalogo;
   etiqueta: string;
@@ -50,6 +51,7 @@ export function CatalogPicker({
   onSeleccionar: (v: SeleccionCatalogo | null) => void;
   ayuda?: string;
   ayudaDetalle?: string;
+  required?: boolean;
 }) {
   const [termino, setTermino] = useState("");
   const [resultados, setResultados] = useState<ItemCatalogo[]>([]);
@@ -86,7 +88,7 @@ export function CatalogPicker({
   // ── Ya hay algo elegido ────────────────────────────────────────────────
   if (seleccionado) {
     return (
-      <Field label={etiqueta} required ayuda={ayuda}>
+      <Field label={etiqueta} required={required} ayuda={ayuda}>
         {() => (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3 rounded-xl border-2 border-brand-600 bg-brand-50 p-3.5 dark:bg-brand-950/50">
@@ -132,7 +134,7 @@ export function CatalogPicker({
           </p>
         )}
 
-        <Field label={etiqueta} required ayuda={ayuda}>
+        <Field label={etiqueta} required={required} ayuda={ayuda}>
           {(p) => (
             <Input
               {...p}
@@ -199,7 +201,7 @@ export function CatalogPicker({
 
   // ── Búsqueda ───────────────────────────────────────────────────────────
   return (
-    <Field label={etiqueta} required ayuda={ayuda}>
+    <Field label={etiqueta} required={required} ayuda={ayuda}>
       {(p) => (
         <div className="flex flex-col gap-2.5">
           <div className="relative">

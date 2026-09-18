@@ -9,6 +9,7 @@ export function CorreoAltaUsuario({
   email,
   password,
   urlEntrar,
+  invitador,
 }: {
   nombre: string;
   empresa: string;
@@ -16,20 +17,23 @@ export function CorreoAltaUsuario({
   email: string;
   password: string;
   urlEntrar: string;
+  invitador: string;
 }) {
   return (
-    <MarcoCorreo preview={`Tu cuenta de ${empresa} ya está lista en CTPatrol.`}>
-      <Titulo>Ya puedes entrar a CTPatrol</Titulo>
+    <MarcoCorreo preview={`${invitador} te invitó al equipo de ${empresa} en CTPatrol.`}>
+      <Titulo>Te invitaron a CTPatrol</Titulo>
       <Parrafo>Hola {nombre},</Parrafo>
       <Parrafo>
-        Te dieron de alta en <strong>{empresa}</strong> como {rol}. Entra con
-        estos datos y cambia la contraseña en Ajustes: esta es temporal.
+        <strong>{invitador}</strong> te dio de alta en el equipo de{" "}
+        <strong>{empresa}</strong> como {rol}. Con esta cuenta entras a
+        inspeccionar (o a administrar, si ese es tu rol).
       </Parrafo>
       <Dato etiqueta="Correo" valor={email} />
       <Dato etiqueta="Contraseña temporal" valor={password} />
-      <Boton href={urlEntrar}>Entrar</Boton>
+      <Boton href={urlEntrar}>Entrar a CTPatrol</Boton>
       <Text style={{ color: "#475569", fontSize: "13px", lineHeight: "20px", margin: 0 }}>
-        No reenvíes este correo. Quien lo tenga puede entrar con tu cuenta.
+        Cambia la contraseña en Ajustes al entrar. No reenvíes este correo:
+        quien lo tenga puede usar tu cuenta.
       </Text>
     </MarcoCorreo>
   );
@@ -42,4 +46,5 @@ CorreoAltaUsuario.PreviewProps = {
   email: "inspector@demo.mx",
   password: "TemporalDemo12",
   urlEntrar: "http://localhost:3100/login",
+  invitador: "María López",
 };

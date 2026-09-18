@@ -15,6 +15,8 @@ import QRCode from "qrcode";
 
 import { BarraReporte } from "./barra";
 import { CompartirReporte } from "./compartir";
+import { RevocarQr } from "./revocar";
+import { Bitacora } from "@/components/inspection/bitacora";
 import "./reporte.css";
 
 export const metadata: Metadata = { title: "Reporte" };
@@ -101,7 +103,11 @@ export default async function ReportePage({
   let qrDataUrl: string | null = null;
   let urlVerificacion: string | null = null;
 
-  if (inspeccion.verification_token && inspeccion.status === "completed") {
+  if (
+    inspeccion.verification_token &&
+    inspeccion.status === "completed" &&
+    !inspeccion.verification_revoked_at
+  ) {
     urlVerificacion = `${clientEnv.NEXT_PUBLIC_APP_URL}/evidencia/${inspeccion.verification_token}`;
     qrDataUrl = await QRCode.toDataURL(urlVerificacion, {
       margin: 1,
@@ -419,8 +425,8 @@ export default async function ReportePage({
             <div>
               <h3 style={{ margin: 0 }}>Verificación de autenticidad</h3>
               <p style={{ margin: "3pt 0 0", fontSize: "9.5pt" }}>
-                Escanea este código para confirmar que esta inspección existe y
-                cuál fue su resultado.
+                Escanea este código para confirmar el resultado y ver las
+                fotografías de la inspección.
               </p>
               <p
                 style={{
@@ -436,6 +442,15 @@ export default async function ReportePage({
           </section>
         )}
 
+        {inspeccion.status === "completed" && inspeccion.verification_revoked_at && (
+          <section className="no-imprimir" style={{ marginTop: "16pt" }}>
+            <p className="text-sm text-danger-600">
+              El QR de esta inspección está revocado. Quien lo escanee ya no
+              puede verificarla.
+            </p>
+          </section>
+        )}
+
         <footer className="reporte__pie">
           Documento generado por CTPatrol el{" "}
           {format(new Date(), "d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })}.
@@ -443,6 +458,18 @@ export default async function ReportePage({
           coordenadas impresas en la propia imagen.
         </footer>
       </article>
+
+      <div className="no-imprimir mx-auto max-w-3xl px-gutter pb-10">
+        {sesion.esAdmin &&
+          inspeccion.status === "completed" &&
+          inspeccion.verification_token &&
+          !inspeccion.verification_revoked_at && (
+            <div className="mb-6">
+              <RevocarQr inspeccionId={id} />
+            </div>
+          )}
+        <Bitacora inspeccionId={id} />
+      </div>
 
       {inspeccion.status === "completed" && (
         <CompartirReporte

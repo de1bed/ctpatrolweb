@@ -69,11 +69,19 @@ export default async function InicioPage() {
             <h2 className="text-xl font-bold tracking-tight text-ink">
               Pendientes
             </h2>
-            {pendientes.length > 0 && (
-              <span className="text-sm font-medium text-ink-muted">
-                {pendientes.length}
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {pendientes.length > 0 && (
+                <span className="text-sm font-medium text-ink-muted">
+                  {pendientes.length}
+                </span>
+              )}
+              <Link
+                href="/inspecciones?vista=agenda"
+                className="text-sm font-medium text-brand-600"
+              >
+                Calendario
+              </Link>
+            </div>
           </div>
 
           {pendientes.length === 0 ? (
