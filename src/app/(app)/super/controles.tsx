@@ -4,7 +4,12 @@ import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
 
-import { autorizarIa, recargarCreditos, type EstadoPlataforma } from "./acciones";
+import {
+  autorizarIa,
+  cambiarEmpresaActiva,
+  recargarCreditos,
+  type EstadoPlataforma,
+} from "./acciones";
 
 const INICIAL: EstadoPlataforma = { error: null };
 
@@ -12,10 +17,12 @@ export function ControlesEmpresa({
   empresaId,
   autorizada,
   creditos,
+  empresaActiva,
 }: {
   empresaId: string;
   autorizada: boolean;
   creditos: number;
+  empresaActiva: boolean;
 }) {
   const [autorizacion, enviarAutorizacion, pendienteAutorizacion] = useActionState(
     autorizarIa,
@@ -25,9 +32,27 @@ export function ControlesEmpresa({
     recargarCreditos,
     INICIAL
   );
+  const [acceso, enviarAcceso, pendienteAcceso] = useActionState(
+    cambiarEmpresaActiva,
+    INICIAL
+  );
 
   return (
     <div className="flex flex-col gap-3">
+      <form action={enviarAcceso}>
+        <input type="hidden" name="empresaId" value={empresaId} />
+        <input type="hidden" name="activa" value={empresaActiva ? "false" : "true"} />
+        <Button
+          type="submit"
+          variant={empresaActiva ? "danger" : "success"}
+          size="sm"
+          loading={pendienteAcceso}
+        >
+          {empresaActiva ? "Suspender empresa" : "Reactivar empresa"}
+        </Button>
+      </form>
+      {acceso.error && <p className="text-sm text-danger-600">{acceso.error}</p>}
+      {acceso.ok && <p className="text-sm text-ok-700">{acceso.ok}</p>}
       <form action={enviarAutorizacion} className="flex items-center gap-2">
         <input type="hidden" name="empresaId" value={empresaId} />
         <input type="hidden" name="autorizada" value={autorizada ? "false" : "true"} />

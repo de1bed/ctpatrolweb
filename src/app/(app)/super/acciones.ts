@@ -86,3 +86,84 @@ export async function recargarCreditos(
   revalidatePath("/super");
   return { error: null, ok: `Se agregaron ${datos.data.creditos} créditos.` };
 }
+
+const esquemaEmpresaActiva = z.object({
+  empresaId: z.string().uuid(),
+  activa: z.enum(["true", "false"]),
+});
+
+export async function cambiarEmpresaActiva(
+  _anterior: EstadoPlataforma,
+  formData: FormData
+): Promise<EstadoPlataforma> {
+  await requerirSuperAdmin();
+  const datos = esquemaEmpresaActiva.safeParse({
+    empresaId: formData.get("empresaId"),
+    activa: formData.get("activa"),
+  });
+  if (!datos.success) return { error: "No se pudo actualizar la empresa." };
+
+  const supabase = await createClient();
+  const activa = datos.data.activa === "true";
+  const { error } = await supabase
+    .from("company_accounts")
+    .update({ is_active: activa })
+    .eq("id", datos.data.empresaId);
+
+  if (error) return { error: "No se pudo cambiar el estado de la empresa." };
+  revalidatePath("/super");
+  return {
+    error: null,
+    ok: activa
+      ? "Empresa reactivada."
+      : "Empresa suspendida. Su equipo ya no puede entrar.",
+  };
+}
+
+const esquemaMiembro = z.object({
+  miembroId: z.string().uuid(),
+  activo: z.enum(["true", "false"]).optional(),
+  rol: z.enum(["admin", "inspector"]).optional(),
+});
+
+export async function cambiarMiembro(
+  _anterior: EstadoPlataforma,
+  formData: FormData
+): Promise<EstadoPlataforma> {
+  const sesion = await requerirSuperAdmin();
+  const datos = esquemaMiembro.safeParse({
+    miembroId: formData.get("miembroId"),
+    activo: formData.get("activo") || undefined,
+    rol: formData.get("rol") || undefined,
+  });
+  if (!datos.success) return { error: "No se pudo actualizar a esa persona." };
+  if (datos.data.miembroId === sesion.userId) {
+    return { error: "No puedes cambiar tu propio acceso desde aquí." };
+  }
+
+  const supabase = await createClient();
+  const { data: miembro } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", datos.data.miembroId)
+    .maybeSingle();
+
+  if (!miembro) return { error: "No se encontró a esa persona." };
+  if (miembro.role === "super_admin") {
+    return { error: "El acceso de un super admin no se cambia desde esta lista." };
+  }
+
+  const cambios: { is_active?: boolean; role?: "admin" | "inspector" } = {};
+  if (datos.data.activo) cambios.is_active = datos.data.activo === "true";
+  if (datos.data.rol) cambios.role = datos.data.rol;
+  if (Object.keys(cambios).length === 0) return { error: "Nada que cambiar." };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(cambios)
+    .eq("id", datos.data.miembroId);
+
+  if (error) return { error: "No se pudo actualizar a esa persona." };
+  revalidatePath("/super");
+  return { error: null, ok: "Persona actualizada." };
+}

@@ -43,7 +43,7 @@ export async function obtenerSesion(): Promise<Sesion | null> {
   // inferencia se cae y `perfil` termina como un tipo de error inservible.
   const { data: perfil } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, is_active, company_account_id, company_accounts(id, code, name, logo_url)")
+    .select("id, full_name, email, role, is_active, company_account_id, company_accounts(id, code, name, logo_url, is_active)")
     .eq("id", user.id)
     .single();
 
@@ -56,9 +56,12 @@ export async function obtenerSesion(): Promise<Sesion | null> {
     code: string;
     name: string;
     logo_url: string | null;
+    is_active: boolean;
   } | null;
 
   if (!cuenta) return null;
+  // Una empresa suspendida no entra. El super admin sí, para poder reactivarla.
+  if (!cuenta.is_active && perfil.role !== "super_admin") return null;
 
   return {
     userId: perfil.id,
