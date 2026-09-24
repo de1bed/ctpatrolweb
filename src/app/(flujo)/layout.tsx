@@ -1,5 +1,7 @@
 import { Uploader } from "@/components/inspection/uploader";
+import { CreditosProvider } from "@/components/shell/creditos";
 import { requerirSesion } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * Armazón del flujo de inspección.
@@ -24,11 +26,19 @@ import { requerirSesion } from "@/lib/auth";
  */
 export default async function FlujoLayout({ children }: LayoutProps<"/">) {
   const sesion = await requerirSesion();
+  const supabase = await createClient();
+  const { data: cuenta } = await supabase
+    .from("company_accounts")
+    .select("creditos_ia")
+    .eq("id", sesion.companyAccountId)
+    .maybeSingle();
 
   return (
+    <CreditosProvider inicial={cuenta?.creditos_ia ?? 0}>
     <div className="min-h-screen-safe bg-surface-sunken">
       {children}
       <Uploader companyAccountId={sesion.companyAccountId} />
     </div>
+    </CreditosProvider>
   );
 }

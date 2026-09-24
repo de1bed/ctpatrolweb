@@ -36,7 +36,8 @@ export function CamaraPantallaCompleta({
   onCerrar: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const archivoRef = useRef<HTMLInputElement>(null);
+  const archivoCamaraRef = useRef<HTMLInputElement>(null);
+  const archivoGaleriaRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [estado, setEstado] = useState<"abriendo" | "lista" | "error">("abriendo");
@@ -83,9 +84,21 @@ export function CamaraPantallaCompleta({
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => {});
+        const video = videoRef.current;
+        if (video) {
+          video.muted = true;
+          video.srcObject = stream;
+          await video.play().catch(() => {});
+          if (video.videoWidth === 0) {
+            await new Promise<void>((resolve) => {
+              const listo = () => resolve();
+              video.addEventListener("loadeddata", listo, { once: true });
+              window.setTimeout(listo, 2500);
+            });
+          }
+        }
+        if (!video?.videoWidth) {
+          throw new Error("La cámara no entregó imagen. Usa los botones de abajo.");
         }
         setEstado("lista");
       } catch (e) {
@@ -144,13 +157,24 @@ export function CamaraPantallaCompleta({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black">
+    <div className="fixed inset-0 z-[80] flex flex-col bg-black">
       <input
-        ref={archivoRef}
+        ref={archivoCamaraRef}
         type="file"
         accept="image/*"
         capture="environment"
-        className="sr-only"
+        className="absolute h-px w-px opacity-0"
+        onChange={(e) => {
+          const archivo = e.target.files?.[0];
+          e.target.value = "";
+          if (archivo) void desdeArchivo(archivo);
+        }}
+      />
+      <input
+        ref={archivoGaleriaRef}
+        type="file"
+        accept="image/*"
+        className="absolute h-px w-px opacity-0"
         onChange={(e) => {
           const archivo = e.target.files?.[0];
           e.target.value = "";
@@ -227,15 +251,15 @@ export function CamaraPantallaCompleta({
         <div className="flex h-28 w-full items-center justify-center gap-8">
           <button
             type="button"
-            onClick={() => archivoRef.current?.click()}
+            onClick={() => archivoGaleriaRef.current?.click()}
             disabled={capturando}
-            aria-label="Tomar o elegir foto con el teléfono"
+            aria-label="Elegir una imagen"
             className="flex flex-col items-center gap-1 text-white/90 disabled:opacity-40"
           >
             <span className="flex size-14 items-center justify-center rounded-full border-2 border-white/70">
               <ImagePlus className="size-6" aria-hidden />
             </span>
-            <span className="text-xs font-medium">Teléfono</span>
+            <span className="text-xs font-medium">Galería</span>
           </button>
 
           <button
@@ -256,16 +280,27 @@ export function CamaraPantallaCompleta({
         </div>
 
         {estado === "error" && (
-          <Button
-            size="lg"
-            block
-            onClick={() => archivoRef.current?.click()}
-            disabled={capturando}
-            loading={capturando}
-          >
-            {!capturando && <Camera className="size-5" aria-hidden />}
-            Tomar foto ahora
-          </Button>
+          <div className="flex w-full flex-col gap-2">
+            <Button
+              size="lg"
+              block
+              onClick={() => archivoCamaraRef.current?.click()}
+              disabled={capturando}
+              loading={capturando}
+            >
+              {!capturando && <Camera className="size-5" aria-hidden />}
+              Tomar foto con la cámara
+            </Button>
+            <Button
+              size="lg"
+              block
+              variant="secondary"
+              onClick={() => archivoGaleriaRef.current?.click()}
+              disabled={capturando}
+            >
+              Elegir una imagen
+            </Button>
+          </div>
         )}
       </div>
     </div>

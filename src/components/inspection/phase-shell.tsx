@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { PastillaCreditos } from "@/components/shell/creditos";
 import { guardarFase } from "@/app/(flujo)/inspeccion/[id]/acciones";
 import { cn } from "@/lib/cn";
 
@@ -141,6 +142,7 @@ export function PantallaFase({
               Paso {indice} de {total}
             </p>
           </div>
+          <PastillaCreditos />
         </div>
 
         {/* Línea de avance pegada al encabezado: contexto permanente sin

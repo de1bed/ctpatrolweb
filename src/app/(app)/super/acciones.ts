@@ -16,6 +16,7 @@ const esquemaAutorizar = z.object({
 const esquemaRecarga = z.object({
   empresaId: z.string().uuid(),
   creditos: z.coerce.number().int().min(1).max(100_000),
+  sentido: z.enum(["sumar", "restar"]),
   nota: z.string().trim().max(200).optional(),
 });
 
@@ -53,6 +54,7 @@ export async function recargarCreditos(
   const datos = esquemaRecarga.safeParse({
     empresaId: formData.get("empresaId"),
     creditos: formData.get("creditos"),
+    sentido: formData.get("sentido"),
     nota: formData.get("nota") || undefined,
   });
   if (!datos.success) return { error: "Escribe una cantidad de créditos válida." };
@@ -66,25 +68,41 @@ export async function recargarCreditos(
 
   if (!cuenta) return { error: "No se encontró la empresa." };
 
-  const saldo = cuenta.creditos_ia + datos.data.creditos;
+  const delta =
+    datos.data.sentido === "restar" ? -datos.data.creditos : datos.data.creditos;
+  const saldo = Math.max(0, cuenta.creditos_ia + delta);
+  const aplicado = saldo - cuenta.creditos_ia;
+  if (aplicado === 0) {
+    return { error: "Esa empresa ya está en 0 créditos." };
+  }
+
   const { error } = await supabase
     .from("company_accounts")
     .update({ creditos_ia: saldo })
     .eq("id", datos.data.empresaId);
 
-  if (error) return { error: "No se pudieron agregar los créditos." };
+  if (error) return { error: "No se pudieron actualizar los créditos." };
 
   await supabase.from("ia_movimientos").insert({
     company_account_id: datos.data.empresaId,
     tipo: "recarga",
-    creditos: datos.data.creditos,
+    creditos: aplicado,
     saldo,
     actor_id: sesion.userId,
-    nota: datos.data.nota || "Recarga del super admin",
+    nota:
+      datos.data.nota ||
+      (aplicado > 0 ? "Recarga del super admin" : "Ajuste del super admin"),
   });
 
   revalidatePath("/super");
-  return { error: null, ok: `Se agregaron ${datos.data.creditos} créditos.` };
+  revalidatePath("/");
+  return {
+    error: null,
+    ok:
+      aplicado > 0
+        ? `Quedaron ${saldo} créditos.`
+        : `Se quitaron ${Math.abs(aplicado)}. Quedaron ${saldo}.`,
+  };
 }
 
 const esquemaEmpresaActiva = z.object({

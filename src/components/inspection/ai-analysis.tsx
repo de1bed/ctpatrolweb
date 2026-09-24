@@ -10,6 +10,7 @@ import {
 import { useEffect, useState, useTransition } from "react";
 
 import { analizarEvidencia } from "@/app/(flujo)/inspeccion/[id]/ia-acciones";
+import { useCreditos } from "@/components/shell/creditos";
 import { cn } from "@/lib/cn";
 import type { Analisis } from "@/lib/ai/vision";
 import {
@@ -52,6 +53,7 @@ export function AnalisisIA({
     analisisPrevio ?? null
   );
   const [error, setError] = useState<string | null>(null);
+  const creditos = useCreditos();
 
   useEffect(() => {
     if (mediaId) setId(mediaId);
@@ -83,6 +85,7 @@ export function AnalisisIA({
       const r = await analizarEvidencia({ inspeccionId, mediaId: id });
       if (r.ok) {
         setAnalisis(r.analisis);
+        if (r.creditos != null) creditos?.fijar(r.creditos);
       } else {
         lanzados.delete(id);
         setError(r.error);
@@ -97,8 +100,10 @@ export function AnalisisIA({
     empezar(async () => {
       setError(null);
       const r = await analizarEvidencia({ inspeccionId, mediaId: id });
-      if (r.ok) setAnalisis(r.analisis);
-      else {
+      if (r.ok) {
+        setAnalisis(r.analisis);
+        if (r.creditos != null) creditos?.fijar(r.creditos);
+      } else {
         lanzados.delete(id);
         setError(r.error);
       }

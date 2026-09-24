@@ -6,6 +6,7 @@ import { ControlesPausa } from "@/components/inspection/pause-controls";
 import { PhaseList } from "@/components/inspection/phase-list";
 import { ProgressBar } from "@/components/inspection/progress-bar";
 import { StatusBadge } from "@/components/inspection/status-badge";
+import { PastillaCreditos } from "@/components/shell/creditos";
 import { Bitacora } from "@/components/inspection/bitacora";
 import { Card } from "@/components/ui/card";
 import { requerirSesion } from "@/lib/auth";
@@ -67,6 +68,7 @@ export default async function InspeccionPage({
               {inspeccion.customer_name ?? "Sin transportista"}
             </p>
           </div>
+          <PastillaCreditos />
           <StatusBadge estado={inspeccion.status} />
         </div>
       </header>

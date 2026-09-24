@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { cerrarSesion } from "@/app/login/actions";
+import { PastillaCreditos } from "@/components/shell/creditos";
 import { cn } from "@/lib/cn";
 
 function iniciales(nombre: string): string {
@@ -67,56 +68,59 @@ export function AppHeader({
           </p>
         </div>
 
-        <div className="relative shrink-0" ref={contenedor}>
-          <button
-            type="button"
-            onClick={() => setAbierto((a) => !a)}
-            aria-haspopup="menu"
-            aria-expanded={abierto}
-            aria-label={`Cuenta de ${nombreUsuario}`}
-            className={cn(
-              "flex size-10 items-center justify-center rounded-full",
-              "bg-brand-600 text-sm font-bold text-white",
-              "transition-transform active:scale-95"
-            )}
-          >
-            {iniciales(nombreUsuario)}
-          </button>
-
-          {abierto && (
-            <div
-              role="menu"
-              className="absolute right-0 top-12 w-60 overflow-hidden rounded-2xl border border-line bg-surface-overlay shadow-lg"
+        <div className="flex shrink-0 items-center gap-2">
+          <PastillaCreditos />
+          <div className="relative" ref={contenedor}>
+            <button
+              type="button"
+              onClick={() => setAbierto((a) => !a)}
+              aria-haspopup="menu"
+              aria-expanded={abierto}
+              aria-label={`Cuenta de ${nombreUsuario}`}
+              className={cn(
+                "flex size-10 items-center justify-center rounded-full",
+                "bg-brand-600 text-sm font-bold text-white",
+                "transition-transform active:scale-95"
+              )}
             >
-              <div className="border-b border-line px-4 py-3">
-                <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  <User className="size-4 shrink-0 text-ink-muted" aria-hidden />
-                  <span className="truncate">{nombreUsuario}</span>
-                </p>
-              </div>
+              {iniciales(nombreUsuario)}
+            </button>
 
-              <Link
-                href="/ajustes"
-                role="menuitem"
-                onClick={() => setAbierto(false)}
-                className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-base text-ink-secondary hover:bg-surface-sunken"
+            {abierto && (
+              <div
+                role="menu"
+                className="absolute right-0 top-12 w-60 overflow-hidden rounded-2xl border border-line bg-surface-overlay shadow-lg"
               >
-                <Settings className="size-5 shrink-0" aria-hidden />
-                Ajustes
-              </Link>
+                <div className="border-b border-line px-4 py-3">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+                    <User className="size-4 shrink-0 text-ink-muted" aria-hidden />
+                    <span className="truncate">{nombreUsuario}</span>
+                  </p>
+                </div>
 
-              <form action={cerrarSesion}>
-                <button
-                  type="submit"
+                <Link
+                  href="/ajustes"
                   role="menuitem"
-                  className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-base text-danger-600 hover:bg-surface-sunken"
+                  onClick={() => setAbierto(false)}
+                  className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-base text-ink-secondary hover:bg-surface-sunken"
                 >
-                  <LogOut className="size-5 shrink-0" aria-hidden />
-                  Cerrar sesión
-                </button>
-              </form>
-            </div>
-          )}
+                  <Settings className="size-5 shrink-0" aria-hidden />
+                  Ajustes
+                </Link>
+
+                <form action={cerrarSesion}>
+                  <button
+                    type="submit"
+                    role="menuitem"
+                    className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-base text-danger-600 hover:bg-surface-sunken"
+                  >
+                    <LogOut className="size-5 shrink-0" aria-hidden />
+                    Cerrar sesión
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

@@ -43,11 +43,11 @@ const esquema = z.object({
 });
 
 export type ResultadoIa =
-  | { ok: true; analisis: Analisis; yaExistia: boolean }
+  | { ok: true; analisis: Analisis; yaExistia: boolean; creditos: number | null }
   | { ok: false; error: string };
 
 export async function analizarEvidencia(entrada: unknown): Promise<ResultadoIa> {
-  await requerirSesion();
+  const sesion = await requerirSesion();
 
   if (!isOpenAiConfigured()) {
     return {
@@ -83,6 +83,7 @@ export async function analizarEvidencia(entrada: unknown): Promise<ResultadoIa> 
       ok: true,
       analisis: media.ai_analysis as unknown as Analisis,
       yaExistia: true,
+      creditos: null,
     };
   }
 
@@ -167,7 +168,18 @@ export async function analizarEvidencia(entrada: unknown): Promise<ResultadoIa> 
     })
     .eq("id", mediaId);
 
-  return { ok: true, analisis: resultado.analisis, yaExistia: false };
+  const { data: cuenta } = await supabase
+    .from("company_accounts")
+    .select("creditos_ia")
+    .eq("id", sesion.companyAccountId)
+    .maybeSingle();
+
+  return {
+    ok: true,
+    analisis: resultado.analisis,
+    yaExistia: false,
+    creditos: cuenta?.creditos_ia ?? null,
+  };
 }
 
 /** Recupera la pista del catálogo de puntos, sin importar a qué grupo pertenezca. */

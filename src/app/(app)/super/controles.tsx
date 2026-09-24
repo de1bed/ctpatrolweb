@@ -86,8 +86,25 @@ export function ControlesEmpresa({
           required
           className="h-10 w-24 rounded-lg border border-line bg-surface px-3 text-sm text-ink"
         />
-        <Button type="submit" variant="secondary" size="sm" loading={pendienteRecarga}>
-          Agregar créditos
+        <Button
+          type="submit"
+          name="sentido"
+          value="sumar"
+          variant="secondary"
+          size="sm"
+          loading={pendienteRecarga}
+        >
+          Agregar
+        </Button>
+        <Button
+          type="submit"
+          name="sentido"
+          value="restar"
+          variant="danger"
+          size="sm"
+          loading={pendienteRecarga}
+        >
+          Quitar
         </Button>
       </form>
       {recarga.error && <p className="text-sm text-danger-600">{recarga.error}</p>}
