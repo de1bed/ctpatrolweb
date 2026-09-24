@@ -166,8 +166,10 @@ export function CamaraPantallaCompleta({
         className="absolute h-px w-px opacity-0"
         onChange={(e) => {
           const archivo = e.target.files?.[0];
-          e.target.value = "";
-          if (archivo) void desdeArchivo(archivo);
+          if (!archivo) return;
+          void desdeArchivo(archivo).finally(() => {
+            e.target.value = "";
+          });
         }}
       />
       <input
@@ -177,8 +179,10 @@ export function CamaraPantallaCompleta({
         className="absolute h-px w-px opacity-0"
         onChange={(e) => {
           const archivo = e.target.files?.[0];
-          e.target.value = "";
-          if (archivo) void desdeArchivo(archivo);
+          if (!archivo) return;
+          void desdeArchivo(archivo).finally(() => {
+            e.target.value = "";
+          });
         }}
       />
 

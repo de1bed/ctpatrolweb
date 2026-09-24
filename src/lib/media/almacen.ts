@@ -41,6 +41,11 @@ export type FotoLocal = {
   puntoNombre: string;
 
   blob: Blob;
+  /**
+   * Copia en memoria. Es lo que realmente se persiste: guardar el Blob de la
+   * cámara o del input hace que Chrome falle con "blob file data to be stored".
+   */
+  bytes?: ArrayBuffer;
   mimeType: string;
   ancho: number;
   alto: number;
@@ -103,6 +108,31 @@ function base(): BaseLocal {
   return baseCache;
 }
 
+/**
+ * Copia el archivo a memoria antes de IndexedDB.
+ *
+ * Chrome rechaza con "blob file data to be stored in the object store" si el
+ * Blob todavía apunta a la cámara, al canvas o a un input que ya se limpió.
+ */
+async function bytesDeBlob(blob: Blob): Promise<Uint8Array> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (bytes.byteLength === 0) {
+    throw new Error("La foto llegó vacía. Tómala de nuevo.");
+  }
+  return bytes;
+}
+
+function hidratar(foto: FotoLocal): FotoLocal {
+  if (foto.blob && foto.blob.size > 0) return foto;
+  if (foto.bytes && foto.bytes.byteLength > 0) {
+    return {
+      ...foto,
+      blob: new Blob([foto.bytes], { type: foto.mimeType || "image/jpeg" }),
+    };
+  }
+  return foto;
+}
+
 export async function guardarFoto(
   foto: Omit<
     FotoLocal,
@@ -111,18 +141,25 @@ export async function guardarFoto(
     tipo?: TipoMedia;
   }
 ): Promise<FotoLocal> {
+  const bytes = await bytesDeBlob(foto.blob);
+  const mimeType = foto.mimeType || "image/jpeg";
+  const copia = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copia).set(bytes);
   const completa: FotoLocal = {
     tipo: "foto",
     ...foto,
+    mimeType,
+    bytes: copia,
     estado: "pendiente",
     intentos: 0,
     ultimoError: null,
     storagePath: null,
     mediaId: null,
   };
-  await base().fotos.put(completa);
+  const { blob: _blob, ...persistido } = completa;
+  await base().fotos.put(persistido as FotoLocal);
   avisarEvidenciaNueva();
-  return completa;
+  return hidratar(persistido as FotoLocal);
 }
 
 /** El uploader escucha esto para no esperar al latido de 45 s. */
@@ -162,11 +199,16 @@ export async function fotosDePaso(
   return base()
     .fotos.where("[inspeccionId+paso]")
     .equals([inspeccionId, paso])
-    .toArray();
+    .toArray()
+    .then((fotos) => fotos.map(hidratar));
 }
 
 export async function fotosDeInspeccion(inspeccionId: string): Promise<FotoLocal[]> {
-  return base().fotos.where("inspeccionId").equals(inspeccionId).toArray();
+  return base()
+    .fotos.where("inspeccionId")
+    .equals(inspeccionId)
+    .toArray()
+    .then((fotos) => fotos.map(hidratar));
 }
 
 export async function borrarFoto(clientId: string): Promise<void> {
@@ -188,7 +230,7 @@ export async function pendientesDeSubida(): Promise<FotoLocal[]> {
     .fotos.where("estado")
     .anyOf(["pendiente", "fallida"])
     .toArray();
-  return fotos.sort((a, b) => a.capturadaEn.localeCompare(b.capturadaEn));
+  return fotos.map(hidratar).sort((a, b) => a.capturadaEn.localeCompare(b.capturadaEn));
 }
 
 /**
