@@ -112,9 +112,9 @@ export function AnalisisIA({
 
   if (analisis) {
     const tono =
-      analisis.sugerencia === "atencion"
+      analisis.calidadImagen === "mala" || analisis.sugerencia === "atencion"
         ? "danger"
-        : analisis.sugerencia === "revisar"
+        : analisis.sugerencia === "revisar" || analisis.calidadImagen === "regular"
           ? "warn"
           : "ok";
 
@@ -141,11 +141,13 @@ export function AnalisisIA({
             )}
             aria-hidden
           />
-          {analisis.sugerencia === "sin_novedad"
-            ? "Sin novedad aparente"
-            : analisis.sugerencia === "revisar"
-              ? "Conviene revisar"
-              : "Requiere atención"}
+          {analisis.calidadImagen === "mala"
+            ? "Esta foto está mal"
+            : analisis.sugerencia === "sin_novedad"
+              ? "Se ve bien"
+              : analisis.sugerencia === "revisar"
+                ? "Se ve regular"
+                : "Se ve mal"}
         </p>
 
         <p className="mt-1.5 text-ink-secondary">{analisis.observacion}</p>
@@ -164,15 +166,20 @@ export function AnalisisIA({
           </ul>
         )}
 
-        {analisis.calidadImagen !== "buena" && analisis.problemaCalidad && (
-          <p className="mt-2 border-t border-current/15 pt-2 text-ink-muted">
-            Calidad de la foto: {analisis.calidadImagen}.{" "}
-            {analisis.problemaCalidad}
-          </p>
-        )}
-
-        <p className="mt-2 border-t border-current/15 pt-2 text-xs text-ink-muted">
-          Sugerencia automática. La calificación del punto la decides tú.
+        <p className="mt-2 border-t border-current/15 pt-2 text-ink-muted">
+          Foto:{" "}
+          {analisis.calidadImagen === "buena"
+            ? "buena"
+            : analisis.calidadImagen === "regular"
+              ? "regular"
+              : "mala"}
+          {analisis.problemaCalidad ? `. ${analisis.problemaCalidad}` : ""}. Punto:{" "}
+          {analisis.sugerencia === "sin_novedad"
+            ? "bien"
+            : analisis.sugerencia === "revisar"
+              ? "regular"
+              : "mal"}
+          .
         </p>
       </div>
     );

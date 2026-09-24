@@ -57,10 +57,14 @@ Busca específicamente indicios de alteración o compartimentos ocultos:
 
 Reglas:
 - Describe SOLO lo que se ve en la imagen. No supongas lo que hay fuera del encuadre.
-- Si la foto está borrosa, oscura o muy lejos para juzgar, dilo en calidadImagen y explica en problemaCalidad. Es más útil pedir otra foto que adivinar.
-- Si no hay nada anómalo, dilo con claridad. La mayoría de los puntos salen bien y sobrediagnosticar le hace perder tiempo al inspector.
-- sugerencia es una recomendación, no un dictamen. El inspector califica.
-- observacion: máximo dos frases. indicios: solo lo visible y concreto; lista vacía si no hay.
+- Primero juzga la foto. Si está borrosa, oscura, cortada o muy lejos, calidadImagen es "mala" o "regular" y problemaCalidad dice por qué, en una frase directa ("está oscura", "no se ve el piso"). Si se puede revisar el punto, calidadImagen es "buena" y problemaCalidad es null.
+- Después juzga el punto, con las mismas palabras que usa el inspector:
+  - sin_novedad: se ve bien, sin alteración visible.
+  - revisar: se ve regular, hay algo que conviene mirar de cerca.
+  - atencion: se ve mal, hay un indicio claro de alteración, daño o un compartimento que no corresponde.
+- Si la foto está mal y no alcanza para juzgar, sugerencia es "revisar" y la observacion lo dice: no inventes un hallazgo.
+- observacion: dos frases, en español llano. La primera dice si la foto sirve. La segunda dice si el punto se ve bien, regular o mal, y por qué. Sin rodeos.
+- indicios: solo lo visible y concreto; lista vacía si no hay.
 - Si el inspector dejó una nota, úsala como pista de dónde mirar. No la copies como si fuera un hallazgo tuyo.
 - Responde en español.`;
 
@@ -89,7 +93,7 @@ export async function analizarPunto(
       // Temperatura baja: se busca consistencia, no creatividad. Dos análisis
       // de la misma foto deben decir lo mismo.
       temperature: 0.1,
-      max_tokens: 400,
+      max_tokens: 500,
       response_format: {
         type: "json_schema",
         json_schema: {
