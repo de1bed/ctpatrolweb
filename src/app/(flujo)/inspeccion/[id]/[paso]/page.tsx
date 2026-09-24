@@ -214,6 +214,17 @@ export default async function PasoPage({
         };
       }
 
+      const { data: cuentaIa } = await supabase
+        .from("company_accounts")
+        .select("ia_plataforma, ia_activa, creditos_ia")
+        .eq("id", sesion.companyAccountId)
+        .maybeSingle();
+      const iaHabilitada = Boolean(
+        cuentaIa?.ia_plataforma &&
+          cuentaIa.ia_activa &&
+          cuentaIa.creditos_ia > 0
+      );
+
       return (
         <FaseVisual
           key={JSON.stringify(datosPrevios)}
@@ -223,6 +234,7 @@ export default async function PasoPage({
           longitud={inspeccion.longitude}
           evidenciaSubida={evidencia}
           puedeRechazar={sesion.esAdmin}
+          iaHabilitada={iaHabilitada}
         />
       );
     }

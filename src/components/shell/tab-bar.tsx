@@ -17,9 +17,17 @@ import { esActivo, NAV_OPERATIVO } from "./nav-items";
  * `pb-safe` no es opcional: sin él, en un iPhone la última fila de íconos
  * queda debajo de la barra de gestos y se toca el sistema en vez de la app.
  */
-export function TabBar({ esAdmin }: { esAdmin: boolean }) {
+export function TabBar({
+  esAdmin,
+  esSuperAdmin,
+}: {
+  esAdmin: boolean;
+  esSuperAdmin: boolean;
+}) {
   const pathname = usePathname();
-  const items = NAV_OPERATIVO.filter((i) => !i.soloAdmin || esAdmin);
+  const items = NAV_OPERATIVO.filter(
+    (i) => (!i.soloAdmin || esAdmin) && (!i.soloSuper || esSuperAdmin)
+  );
 
   return (
     <nav

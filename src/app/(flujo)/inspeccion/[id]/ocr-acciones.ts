@@ -6,6 +6,7 @@ import { requerirSesion } from "@/lib/auth";
 import { extraerDeDocumento, type Extraccion } from "@/lib/ai/ocr";
 import { LADO_VISION_DOCUMENTO, prepararParaVision } from "@/lib/ai/imagen";
 import { isOpenAiConfigured } from "@/lib/env";
+import { consumirCredito, reembolsarCredito } from "@/lib/ia/creditos";
 
 /**
  * Escaneo de un documento con la cámara.
@@ -53,6 +54,9 @@ export async function escanearDocumento(entrada: unknown): Promise<ResultadoOcr>
     };
   }
 
+  const cobro = await consumirCredito({ nota: "Escaneo de documento" });
+  if (!cobro.ok) return { ok: false, error: cobro.error };
+
   const crudo = Buffer.from(validado.data.imagenBase64, "base64");
   const imagen = await prepararParaVision(
     crudo,
@@ -62,6 +66,9 @@ export async function escanearDocumento(entrada: unknown): Promise<ResultadoOcr>
 
   const resultado = await extraerDeDocumento(imagen.base64, imagen.mimeType);
 
-  if (!resultado.ok) return { ok: false, error: resultado.error };
+  if (!resultado.ok) {
+    await reembolsarCredito(cobro.movimientoId);
+    return { ok: false, error: resultado.error };
+  }
   return { ok: true, datos: resultado.datos };
 }

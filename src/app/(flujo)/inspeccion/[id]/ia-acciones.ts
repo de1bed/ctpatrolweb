@@ -8,6 +8,7 @@ import { notaDelPunto } from "@/lib/ai/contexto";
 import { LADO_VISION_PUNTO, prepararParaVision } from "@/lib/ai/imagen";
 import { analizarPunto, type Analisis } from "@/lib/ai/vision";
 import { isOpenAiConfigured } from "@/lib/env";
+import { consumirCredito, reembolsarCredito } from "@/lib/ia/creditos";
 import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
@@ -103,12 +104,20 @@ export async function analizarEvidencia(entrada: unknown): Promise<ResultadoIa> 
     };
   }
 
+  const cobro = await consumirCredito({
+    nota: "Análisis de foto",
+    inspectionId: inspeccionId,
+    mediaId,
+  });
+  if (!cobro.ok) return { ok: false, error: cobro.error };
+
   // ── Descarga de la imagen ───────────────────────────────────────────────
   const { data: archivo, error: errorDescarga } = await supabase.storage
     .from("inspection-media")
     .download(media.storage_path);
 
   if (errorDescarga || !archivo) {
+    await reembolsarCredito(cobro.movimientoId);
     return { ok: false, error: "No se pudo leer la foto." };
   }
 
@@ -140,7 +149,10 @@ export async function analizarEvidencia(entrada: unknown): Promise<ResultadoIa> 
     notaInspector,
   });
 
-  if (!resultado.ok) return { ok: false, error: resultado.error };
+  if (!resultado.ok) {
+    await reembolsarCredito(cobro.movimientoId);
+    return { ok: false, error: resultado.error };
+  }
 
   // ── Persistencia ────────────────────────────────────────────────────────
   await supabase

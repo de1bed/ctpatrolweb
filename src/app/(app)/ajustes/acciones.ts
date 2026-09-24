@@ -40,3 +40,31 @@ export async function guardarCorreosReporte(
   revalidatePath("/ajustes");
   return { error: null, ok: true };
 }
+
+export type EstadoAjustes = { error: string | null };
+
+export async function cambiarIaEmpresa(
+  _anterior: EstadoAjustes,
+  formData: FormData
+): Promise<EstadoAjustes> {
+  const sesion = await requerirSesion();
+  if (!sesion.esAdmin) return { error: "Solo el administrador puede cambiar esto." };
+
+  const activa = formData.get("activa") === "true";
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("company_accounts")
+    .update({ ia_activa: activa })
+    .eq("id", sesion.companyAccountId);
+
+  if (error) {
+    return {
+      error: error.message.includes("no está autorizada")
+        ? "La IA no está autorizada para esta empresa."
+        : "No se pudo cambiar el análisis con IA.",
+    };
+  }
+
+  revalidatePath("/ajustes");
+  return { error: null };
+}

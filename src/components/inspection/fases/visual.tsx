@@ -87,6 +87,8 @@ export function FaseVisual(
       string,
       { id: string; analisis: unknown; url?: string | null }
     >;
+    /** La empresa tiene IA autorizada, encendida y con créditos. */
+    iaHabilitada?: boolean;
     /** Solo admin puede ejecutar el rechazo de la unidad. */
     puedeRechazar?: boolean;
   }
@@ -460,7 +462,10 @@ export function FaseVisual(
 
                       {/* Análisis con IA: solo tiene sentido si hay foto y no
                           se marcó como "no aplica". */}
-                      {!estado.noAplica && (fotoLocal || urlFoto) && (
+                      {!estado.noAplica &&
+                        (props.iaHabilitada ||
+                          Boolean(props.evidenciaSubida?.[punto.clave]?.analisis)) &&
+                        (fotoLocal || urlFoto) && (
                         <AnalisisIA
                           key={
                             fotoLocal?.clientId ??

@@ -16,9 +16,17 @@ import { esActivo, NAV_AJUSTES, NAV_OPERATIVO } from "./nav-items";
  * completa para el contenido, que es lo que el admin necesita cuando está
  * viendo tablas.
  */
-export function SideRail({ esAdmin }: { esAdmin: boolean }) {
+export function SideRail({
+  esAdmin,
+  esSuperAdmin,
+}: {
+  esAdmin: boolean;
+  esSuperAdmin: boolean;
+}) {
   const pathname = usePathname();
-  const items = NAV_OPERATIVO.filter((i) => !i.soloAdmin || esAdmin);
+  const items = NAV_OPERATIVO.filter(
+    (i) => (!i.soloAdmin || esAdmin) && (!i.soloSuper || esSuperAdmin)
+  );
   const IconoAjustes = NAV_AJUSTES.icono;
 
   return (

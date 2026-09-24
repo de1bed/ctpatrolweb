@@ -25,6 +25,9 @@ export type Database = {
         Row: {
           code: string
           created_at: string
+          creditos_ia: number
+          ia_activa: boolean
+          ia_plataforma: boolean
           id: string
           is_active: boolean
           logo_url: string | null
@@ -35,6 +38,9 @@ export type Database = {
         Insert: {
           code: string
           created_at?: string
+          creditos_ia?: number
+          ia_activa?: boolean
+          ia_plataforma?: boolean
           id?: string
           is_active?: boolean
           logo_url?: string | null
@@ -45,12 +51,57 @@ export type Database = {
         Update: {
           code?: string
           created_at?: string
+          creditos_ia?: number
+          ia_activa?: boolean
+          ia_plataforma?: boolean
           id?: string
           is_active?: boolean
           logo_url?: string | null
           name?: string
           settings?: Json
           updated_at?: string
+        }
+        Relationships: []
+      }
+      ia_movimientos: {
+        Row: {
+          actor_id: string | null
+          company_account_id: string
+          created_at: string
+          creditos: number
+          id: string
+          inspection_id: string | null
+          media_id: string | null
+          nota: string
+          reembolsado: boolean
+          saldo: number
+          tipo: string
+        }
+        Insert: {
+          actor_id?: string | null
+          company_account_id: string
+          created_at?: string
+          creditos: number
+          id?: string
+          inspection_id?: string | null
+          media_id?: string | null
+          nota?: string
+          reembolsado?: boolean
+          saldo: number
+          tipo: string
+        }
+        Update: {
+          actor_id?: string | null
+          company_account_id?: string
+          created_at?: string
+          creditos?: number
+          id?: string
+          inspection_id?: string | null
+          media_id?: string | null
+          nota?: string
+          reembolsado?: boolean
+          saldo?: number
+          tipo?: string
         }
         Relationships: []
       }
@@ -813,6 +864,18 @@ export type Database = {
           p_role: Database["public"]["Enums"]["user_role"]
         }
         Returns: string
+      }
+      consumir_credito_ia: {
+        Args: {
+          p_nota: string
+          p_inspection_id?: string
+          p_media_id?: string
+        }
+        Returns: string
+      }
+      reembolsar_credito_ia: {
+        Args: { p_movimiento: string }
+        Returns: number
       }
       registrar_empresa: {
         Args: {

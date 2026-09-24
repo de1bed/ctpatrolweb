@@ -7,6 +7,7 @@ import { obtenerPermisos, requerirSesion } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 import { CorreosReporte } from "./correos-reporte";
+import { InterruptorIa } from "./interruptor-ia";
 import { PanelAjustes } from "./panel";
 
 export const metadata: Metadata = { title: "Ajustes" };
@@ -25,6 +26,12 @@ export default async function AjustesPage() {
     .from("profiles")
     .select("report_emails")
     .eq("id", sesion.userId)
+    .maybeSingle();
+
+  const { data: cuenta } = await supabase
+    .from("company_accounts")
+    .select("ia_plataforma, ia_activa, creditos_ia")
+    .eq("id", sesion.companyAccountId)
     .maybeSingle();
 
   // Los permisos se muestran para que el inspector sepa qué puede hacer ANTES
@@ -95,6 +102,19 @@ export default async function AjustesPage() {
           </Card>
 
           <CorreosReporte valorInicial={(perfil?.report_emails ?? []).join("\n")} />
+
+          {sesion.esAdmin && cuenta && (
+            <Card className="p-4">
+              <h2 className="mb-1 text-sm font-bold uppercase tracking-wider text-ink-muted">
+                Análisis con IA
+              </h2>
+              <InterruptorIa
+                plataforma={cuenta.ia_plataforma}
+                activa={cuenta.ia_activa}
+                creditos={cuenta.creditos_ia}
+              />
+            </Card>
+          )}
 
           {/* ── Permisos ───────────────────────────────────────────────── */}
           {!sesion.esAdmin && (

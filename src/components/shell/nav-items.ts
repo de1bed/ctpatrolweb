@@ -3,6 +3,7 @@ import {
   FolderOpen,
   Home,
   Settings,
+  Shield,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -13,6 +14,8 @@ export type ItemNav = {
   icono: LucideIcon;
   /** Solo visible para admin. */
   soloAdmin?: boolean;
+  /** Solo visible para el super admin de la plataforma. */
+  soloSuper?: boolean;
 };
 
 /**
@@ -30,6 +33,7 @@ export const NAV_OPERATIVO: ItemNav[] = [
   { href: "/inspecciones", etiqueta: "Inspecciones", icono: ClipboardList },
   { href: "/expedientes", etiqueta: "Expedientes", icono: FolderOpen },
   { href: "/admin", etiqueta: "Admin", icono: ShieldCheck, soloAdmin: true },
+  { href: "/super", etiqueta: "Plataforma", icono: Shield, soloSuper: true },
 ];
 
 export const NAV_AJUSTES: ItemNav = {

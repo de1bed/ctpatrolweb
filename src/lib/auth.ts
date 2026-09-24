@@ -16,6 +16,7 @@ export type Sesion = {
   companyAccountId: string;
   cuenta: { id: string; code: string; name: string; logoUrl: string | null };
   esAdmin: boolean;
+  esSuperAdmin: boolean;
 };
 
 /**
@@ -72,6 +73,7 @@ export async function obtenerSesion(): Promise<Sesion | null> {
       logoUrl: cuenta.logo_url,
     },
     esAdmin: perfil.role === "admin" || perfil.role === "super_admin",
+    esSuperAdmin: perfil.role === "super_admin",
   };
 }
 
@@ -86,6 +88,13 @@ export async function requerirSesion(): Promise<Sesion> {
 export async function requerirAdmin(): Promise<Sesion> {
   const sesion = await requerirSesion();
   if (!sesion.esAdmin) redirect("/");
+  return sesion;
+}
+
+/** Exige super admin. El panel de plataforma no es visible para el admin de una empresa. */
+export async function requerirSuperAdmin(): Promise<Sesion> {
+  const sesion = await requerirSesion();
+  if (!sesion.esSuperAdmin) redirect("/");
   return sesion;
 }
 

@@ -22,13 +22,13 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen-safe bg-surface-sunken">
-      <SideRail esAdmin={sesion.esAdmin} />
+      <SideRail esAdmin={sesion.esAdmin} esSuperAdmin={sesion.esSuperAdmin} />
 
       <div className="lg:pl-64">
         {children}
       </div>
 
-      <TabBar esAdmin={sesion.esAdmin} />
+      <TabBar esAdmin={sesion.esAdmin} esSuperAdmin={sesion.esSuperAdmin} />
     </div>
   );
 }
