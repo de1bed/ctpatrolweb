@@ -8,7 +8,9 @@ import { clientEnv } from "@/lib/env";
 import { enviarAltaUsuario } from "@/lib/email/mensajes";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
-export type Resultado = { ok: true; correoEnviado?: boolean; errorCorreo?: string } | { ok: false; error: string };
+export type Resultado =
+  | { ok: true; correoEnviado?: boolean; errorCorreo?: string; urlEntrar?: string }
+  | { ok: false; error: string };
 
 /**
  * Permisos de campo de un inspector.
@@ -177,6 +179,8 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
 
   revalidatePath("/admin/inspectores");
 
+  const urlEntrar = `${clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/login`;
+
   const correo = await enviarAltaUsuario({
     to: email,
     nombre,
@@ -184,7 +188,7 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
     rol: rol === "admin" ? "administrador" : "inspector",
     email,
     password,
-    urlEntrar: `${clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/login`,
+    urlEntrar,
     invitador: sesion.nombre,
   });
 
@@ -215,5 +219,6 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
     ok: true,
     correoEnviado: correo.ok,
     errorCorreo: correo.ok ? undefined : correo.error,
+    urlEntrar,
   };
 }

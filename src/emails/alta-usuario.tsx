@@ -25,15 +25,16 @@ export function CorreoAltaUsuario({
       <Parrafo>Hola {nombre},</Parrafo>
       <Parrafo>
         <strong>{invitador}</strong> te dio de alta en el equipo de{" "}
-        <strong>{empresa}</strong> como {rol}. Con esta cuenta entras a
-        inspeccionar (o a administrar, si ese es tu rol).
+        <strong>{empresa}</strong> como {rol}. Entra a tu cuenta en este
+        enlace, con estos accesos.
       </Parrafo>
+      <Dato etiqueta="Enlace" valor={urlEntrar} />
       <Dato etiqueta="Correo" valor={email} />
       <Dato etiqueta="Contraseña temporal" valor={password} />
       <Boton href={urlEntrar}>Entrar a CTPatrol</Boton>
       <Text style={{ color: "#475569", fontSize: "13px", lineHeight: "20px", margin: 0 }}>
-        Cambia la contraseña en Ajustes al entrar. No reenvíes este correo:
-        quien lo tenga puede usar tu cuenta.
+        Si este correo no te aparece en la bandeja, entra igual con el enlace
+        y los accesos de arriba. Cambia la contraseña en Ajustes al entrar.
       </Text>
     </MarcoCorreo>
   );

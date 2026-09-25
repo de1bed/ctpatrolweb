@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Check, RefreshCw, UserPlus, X } from "lucide-react";
+import { AlertCircle, Check, Copy, RefreshCw, UserPlus, X } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export function AltaUsuario() {
   const [creado, setCreado] = useState<{
     email: string;
     password: string;
+    urlEntrar: string;
     correoEnviado: boolean;
     errorCorreo?: string;
   } | null>(null);
@@ -36,6 +37,7 @@ export function AltaUsuario() {
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState<string>("inspector");
   const [password, setPassword] = useState(generarPassword);
+  const [copiado, setCopiado] = useState(false);
 
   function cerrar() {
     setAbierto(false);
@@ -45,7 +47,20 @@ export function AltaUsuario() {
     setNombre("");
     setRol("inspector");
     setPassword(generarPassword());
+    setCopiado(false);
   }
+
+  const mensajeAcceso = creado
+    ? [
+        "Entra a tu cuenta de CTPatrol en este enlace:",
+        creado.urlEntrar,
+        "",
+        `Correo: ${creado.email}`,
+        `Contraseña: ${creado.password}`,
+        "",
+        "Si no te llegó el correo de invitación, entra con estos datos.",
+      ].join("\n")
+    : "";
 
   if (!abierto) {
     return (
@@ -94,12 +109,21 @@ export function AltaUsuario() {
               <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
                 {creado.correoEnviado
-                  ? "Le enviamos la invitación a su correo, con estos datos. Pídele que cambie la contraseña al entrar."
-                  : `La cuenta quedó lista, pero el correo no salió${creado.errorCorreo ? ` (${creado.errorCorreo})` : ""}. Pásale estos datos en mano.`}
+                  ? "Le enviamos la invitación. Si no le llega, pásale este mensaje con el enlace y los accesos."
+                  : `La cuenta quedó lista, pero el correo no salió${creado.errorCorreo ? ` (${creado.errorCorreo})` : ""}. Pásale este mensaje con el enlace y los accesos.`}
               </span>
             </div>
 
             <div className="rounded-xl border border-line bg-surface-sunken p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                Enlace
+              </p>
+              <a
+                href={creado.urlEntrar}
+                className="mb-3 block break-all font-mono text-sm text-brand-700"
+              >
+                {creado.urlEntrar}
+              </a>
               <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
                 Correo
               </p>
@@ -113,6 +137,19 @@ export function AltaUsuario() {
                 {creado.password}
               </p>
             </div>
+
+            <Button
+              variant="secondary"
+              block
+              onClick={() => {
+                void navigator.clipboard.writeText(mensajeAcceso).then(() => {
+                  setCopiado(true);
+                });
+              }}
+            >
+              <Copy className="size-4" aria-hidden />
+              {copiado ? "Mensaje copiado" : "Copiar mensaje para enviárselo"}
+            </Button>
 
             <p className="text-sm text-ink-muted">
               Esta contraseña no se vuelve a mostrar. Cópiala antes de cerrar.
@@ -221,6 +258,7 @@ export function AltaUsuario() {
                     setCreado({
                       email: email.trim(),
                       password,
+                      urlEntrar: r.urlEntrar ?? "/login",
                       correoEnviado: Boolean(r.correoEnviado),
                       errorCorreo: r.errorCorreo,
                     });
