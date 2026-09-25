@@ -1,3 +1,5 @@
+import type { ObjetivoDocumento } from "./campos-documento";
+
 /**
  * Lectura local de documentos cuando OpenAI no está configurado.
  *
@@ -96,4 +98,33 @@ export function extraerDeTexto(texto: string): LecturaLocal {
 function capturaEtiquetada(texto: string, patron: RegExp): string | null {
   const m = texto.match(patron);
   return m?.[1]?.trim() || null;
+}
+
+/** Se queda solo con el campo que el inspector está llenando. */
+export async function extraerCampoLocal(
+  blob: Blob,
+  objetivo: ObjetivoDocumento
+): Promise<{ valor: string | null; dudoso: boolean; problema: string | null }> {
+  const lectura = await extraerDocumentoLocal(blob);
+  if (lectura.problema) {
+    return { valor: null, dudoso: false, problema: lectura.problema };
+  }
+
+  if (objetivo.campo === "otro") {
+    return {
+      valor: null,
+      dudoso: false,
+      problema: `Sin IA no se puede aislar «${objetivo.titulo.trim()}». Captura el número a mano.`,
+    };
+  }
+
+  const valor = lectura[objetivo.campo];
+  if (!valor) {
+    return {
+      valor: null,
+      dudoso: false,
+      problema: "No se encontró ese dato. Acerca el número o captúralo a mano.",
+    };
+  }
+  return { valor, dudoso: true, problema: null };
 }

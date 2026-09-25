@@ -4,20 +4,26 @@ import { AlertCircle, ImageIcon, LoaderCircle, ScanLine, TriangleAlert, X } from
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { escanearDocumento } from "@/app/(flujo)/inspeccion/[id]/ocr-acciones";
-import { extraerDocumentoLocal } from "@/lib/ai/ocr-local";
-import type { Extraccion } from "@/lib/ai/ocr";
+import { extraerCampoLocal } from "@/lib/ai/ocr-local";
+import { textoObjetivo, type ObjetivoDocumento } from "@/lib/ai/campos-documento";
 import { Button } from "@/components/ui/button";
 import { abrirCamara, explicarErrorCamara } from "@/lib/media/camara";
 import { blobAJpegBase64 } from "@/lib/media/imagen";
 
+export type LecturaCampo = {
+  valor: string | null;
+  dudoso: boolean;
+  problema: string | null;
+};
+
 /**
- * Procesa una imagen de documento: JPEG en el dispositivo, IA en el servidor
- * si está configurada, y OCR local como respaldo. La foto se archiva aparte,
- * como evidencia de la fase.
+ * Lee UN campo de una imagen: el que el inspector está llenando.
+ * IA en el servidor si está configurada; OCR local solo de ese campo si no.
  */
-export async function procesarImagenDocumento(blob: Blob): Promise<
-  { ok: true; datos: Extraccion } | { ok: false; error: string }
-> {
+export async function procesarImagenDocumento(
+  blob: Blob,
+  objetivo: ObjetivoDocumento
+): Promise<{ ok: true; datos: LecturaCampo } | { ok: false; error: string }> {
   let jpeg: string;
   try {
     jpeg = await blobAJpegBase64(blob);
@@ -34,19 +40,21 @@ export async function procesarImagenDocumento(blob: Blob): Promise<
   const remoto = await escanearDocumento({
     imagenBase64: jpeg,
     mimeType: "image/jpeg",
+    campo: objetivo.campo,
+    ...(objetivo.campo === "otro" ? { titulo: objetivo.titulo } : {}),
   });
 
   if (remoto.ok) return remoto;
 
   if (remoto.codigo === "no_configurado") {
     try {
-      const datos = await extraerDocumentoLocal(blob);
+      const datos = await extraerCampoLocal(blob, objetivo);
       return { ok: true, datos };
     } catch {
       return {
         ok: false,
         error:
-          "No se pudo leer el documento en este dispositivo. Captura los datos a mano.",
+          "No se pudo leer el documento en este dispositivo. Captura el dato a mano.",
       };
     }
   }
@@ -55,24 +63,23 @@ export async function procesarImagenDocumento(blob: Blob): Promise<
 }
 
 /**
- * Escáner de documentos con cámara en vivo.
- *
- * "Usar foto del teléfono" vive fuera de este overlay: aquí solo se encuadra
- * y se dispara. Mezclar galería con cámara abierta hacía que el segundo botón
- * volviera a pedir la cámara.
+ * Cámara para leer el número del campo que el inspector tiene abierto.
+ * La foto se archiva aparte, como evidencia de ese campo.
  */
 export function EscanerDocumentos({
+  objetivo,
   onExtraer,
   onImagen,
   onCerrar,
 }: {
-  onExtraer: (datos: Extraccion) => void;
-  /** La foto se archiva aunque la lectura falle. */
-  onImagen: (blob: Blob, datos: Extraccion | null) => void;
+  objetivo: ObjetivoDocumento;
+  onExtraer: (datos: LecturaCampo) => void;
+  onImagen: (blob: Blob) => void;
   onCerrar: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const etiqueta = textoObjetivo(objetivo).etiqueta;
 
   const [estado, setEstado] = useState<"abriendo" | "lista" | "leyendo" | "error">(
     "abriendo"
@@ -115,7 +122,7 @@ export function EscanerDocumentos({
   }, [cerrarStream]);
 
   async function aplicarResultado(
-    r: { ok: true; datos: Extraccion } | { ok: false; error: string }
+    r: { ok: true; datos: LecturaCampo } | { ok: false; error: string }
   ) {
     if (!r.ok) {
       setError(r.error);
@@ -123,29 +130,18 @@ export function EscanerDocumentos({
       return;
     }
 
-    if (r.datos.problema) {
-      setError(r.datos.problema);
-      setEstado(streamRef.current ? "lista" : "error");
-      return;
-    }
-
-    const encontrados = [
-      r.datos.factura,
-      r.datos.billOfLading,
-      r.datos.pedimento,
-      r.datos.sellosFiscales,
-    ].filter(Boolean).length;
-
-    if (encontrados === 0) {
+    const valor = r.datos.valor?.trim();
+    if (!valor) {
       setError(
-        "No se encontró ningún dato reconocible. Acerca más la cámara o captura a mano."
+        r.datos.problema ??
+          `No se encontró ${etiqueta} en la imagen. Acerca ese número o captúralo a mano.`
       );
       setEstado(streamRef.current ? "lista" : "error");
       return;
     }
 
     navigator.vibrate?.(40);
-    onExtraer(r.datos);
+    onExtraer({ ...r.datos, valor });
   }
 
   async function capturar() {
@@ -170,14 +166,12 @@ export function EscanerDocumentos({
     }
 
     try {
-      let datos: Extraccion | null = null;
-      let resultado: { ok: true; datos: Extraccion } | { ok: false; error: string } | null =
+      let resultado: { ok: true; datos: LecturaCampo } | { ok: false; error: string } | null =
         null;
       try {
-        resultado = await procesarImagenDocumento(blob);
-        if (resultado.ok) datos = resultado.datos;
+        resultado = await procesarImagenDocumento(blob, objetivo);
       } finally {
-        onImagen(blob, datos);
+        onImagen(blob);
       }
       if (resultado) await aplicarResultado(resultado);
     } catch {
@@ -190,10 +184,8 @@ export function EscanerDocumentos({
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
       <div className="flex items-center gap-3 px-gutter pt-safe">
         <div className="flex min-h-14 flex-1 flex-col justify-center">
-          <p className="text-base font-semibold text-white">Escanear documento</p>
-          <p className="text-xs text-white/70">
-            Encuadra la hoja completa, con buena luz
-          </p>
+          <p className="text-base font-semibold text-white">Escanear {etiqueta}</p>
+          <p className="text-xs text-white/70">Encuadra el número de {etiqueta}, con buena luz</p>
         </div>
         <button
           type="button"
@@ -231,7 +223,7 @@ export function EscanerDocumentos({
         {estado === "leyendo" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 text-white">
             <LoaderCircle className="size-8 animate-spin" aria-hidden />
-            <p className="font-medium">Leyendo el documento…</p>
+            <p className="font-medium">Leyendo {etiqueta}…</p>
             <p className="text-sm text-white/70">Puede tardar unos segundos</p>
           </div>
         )}
@@ -264,13 +256,13 @@ export function EscanerDocumentos({
             loading={estado === "leyendo"}
           >
             {estado !== "leyendo" && <ScanLine className="size-5" aria-hidden />}
-            {estado === "leyendo" ? "Leyendo…" : "Escanear documento"}
+            {estado === "leyendo" ? "Leyendo…" : `Escanear ${etiqueta}`}
           </Button>
         </div>
 
         <p className="flex items-center gap-1.5 pb-2 text-center text-xs text-white/60">
           <ImageIcon className="size-3.5" aria-hidden />
-          La foto se guarda como evidencia, con fecha y ubicación.
+          La foto se guarda como evidencia de {etiqueta}.
         </p>
       </div>
     </div>

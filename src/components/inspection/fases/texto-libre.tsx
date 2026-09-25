@@ -9,9 +9,13 @@ import { Card } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { OptionCards } from "@/components/ui/option-cards";
 
-import { EscanerDocumentos, procesarImagenDocumento } from "@/components/inspection/document-scanner";
+import {
+  EscanerDocumentos,
+  procesarImagenDocumento,
+  type LecturaCampo,
+} from "@/components/inspection/document-scanner";
+import { textoObjetivo, type ObjetivoDocumento } from "@/lib/ai/campos-documento";
 import { cn } from "@/lib/cn";
-import type { Extraccion } from "@/lib/ai/ocr";
 import { fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
 import { capturarDeArchivo } from "@/lib/media/camara";
 
@@ -42,16 +46,13 @@ function MiniaturaDocumento({ foto }: { foto: FotoLocal }) {
   );
 }
 
+type SesionEscaneo = {
+  objetivo: ObjetivoDocumento;
+  clave: string;
+  indiceOtro: number | null;
+};
+
 /** Fase · Documentos de entrada. */
-function etiquetaDocumento(datos: Extraccion | null, orden: number): string {
-  const tipo = datos?.tipoDocumento?.trim();
-  if (tipo && tipo.toLowerCase() !== "documento") return tipo;
-  if (datos?.factura) return "Factura";
-  if (datos?.billOfLading) return "Bill of Lading";
-  if (datos?.pedimento) return "Pedimento";
-  if (datos?.sellosFiscales) return "Sellos fiscales";
-  return `Documento ${orden}`;
-}
 
 export function FaseDocumentos(
   props: PropsFase & {
@@ -69,12 +70,12 @@ export function FaseDocumentos(
     previo<OtroDoc[]>(props.datosPrevios, "otros", [])
   );
 
-  const [escaneando, setEscaneando] = useState(false);
-  const [leyendoGaleria, setLeyendoGaleria] = useState(false);
-  const [errorGaleria, setErrorGaleria] = useState<string | null>(null);
+  const [sesion, setSesion] = useState<SesionEscaneo | null>(null);
+  const [camaraAbierta, setCamaraAbierta] = useState(false);
+  const [claveLeyendo, setClaveLeyendo] = useState<string | null>(null);
+  const [errorLectura, setErrorLectura] = useState<string | null>(null);
   const galeriaRef = useRef<HTMLInputElement>(null);
-  // Campos que la IA leyó con duda. Se resaltan para que el inspector los
-  // coteje contra el papel en vez de darlos por buenos.
+  const sesionFoto = useRef<SesionEscaneo | null>(null);
   const [dudosos, setDudosos] = useState<string[]>([]);
   const [fotosDoc, setFotosDoc] = useState<FotoLocal[]>([]);
 
@@ -92,9 +93,7 @@ export function FaseDocumentos(
     };
   }, [props.inspeccionId, props.clavePaso]);
 
-  async function archivarImagen(blob: Blob, datos: Extraccion | null) {
-    const orden = fotosDoc.length + 1;
-    const etiqueta = etiquetaDocumento(datos, orden);
+  async function archivarImagen(blob: Blob, etiqueta: string) {
     const capturadaEn = new Date().toISOString();
     const foto = await capturarDeArchivo(
       blob,
@@ -122,42 +121,70 @@ export function FaseDocumentos(
     setFotosDoc((prev) => [...prev, guardada]);
   }
 
-  function aplicarExtraccion(datos: Extraccion) {
-    // Solo se rellenan los campos VACÍOS: si el inspector ya escribió algo a
-    // mano, su captura manda sobre la lectura automática.
-    if (datos.factura && !factura) setFactura(datos.factura);
-    if (datos.billOfLading && !bl) setBl(datos.billOfLading);
-    if (datos.pedimento && !pedimento) setPedimento(datos.pedimento);
-    if (datos.sellosFiscales && !sellos) setSellos(datos.sellosFiscales);
-    setDudosos(datos.camposDudosos);
-    setEscaneando(false);
+  function escribirCampo(activa: SesionEscaneo, datos: LecturaCampo) {
+    const valor = datos.valor?.trim() ?? "";
+    if (!valor) return;
+    if (activa.objetivo.campo === "factura") setFactura(valor);
+    else if (activa.objetivo.campo === "billOfLading") setBl(valor);
+    else if (activa.objetivo.campo === "pedimento") setPedimento(valor);
+    else if (activa.objetivo.campo === "sellosFiscales") setSellos(valor);
+    else if (activa.indiceOtro !== null) {
+      const indice = activa.indiceOtro;
+      setOtros((prev) => prev.map((d, j) => (j === indice ? { ...d, numero: valor } : d)));
+    }
+    setDudosos((prev) =>
+      datos.dudoso
+        ? prev.includes(activa.clave)
+          ? prev
+          : [...prev, activa.clave]
+        : prev.filter((c) => c !== activa.clave)
+    );
+    setCamaraAbierta(false);
+    setSesion(null);
+  }
+
+  function prepararEscaneo(activa: SesionEscaneo): boolean {
+    if (activa.objetivo.campo === "otro" && !activa.objetivo.titulo.trim()) {
+      setErrorLectura("Escribe el título del documento antes de escanearlo.");
+      return false;
+    }
+    setErrorLectura(null);
+    setSesion(activa);
+    return true;
   }
 
   async function aplicarDesdeGaleria(archivo: File) {
-    setLeyendoGaleria(true);
-    setErrorGaleria(null);
+    const activa = sesionFoto.current;
+    if (!activa) return;
+    setClaveLeyendo(activa.clave);
+    setErrorLectura(null);
     try {
-      let datosLeidos: Extraccion | null = null;
-      const r = await procesarImagenDocumento(archivo);
+      let datosLeidos: LecturaCampo | null = null;
+      const r = await procesarImagenDocumento(archivo, activa.objetivo);
       if (r.ok) datosLeidos = r.datos;
       try {
-        await archivarImagen(archivo, datosLeidos);
+        await archivarImagen(archivo, textoObjetivo(activa.objetivo).etiqueta);
       } catch {
-        setErrorGaleria("La foto no se pudo guardar en el dispositivo.");
+        setErrorLectura("La foto no se pudo guardar en el dispositivo.");
       }
       if (!r.ok) {
-        setErrorGaleria(r.error);
+        setErrorLectura(r.error);
         return;
       }
-      if (r.datos.problema) {
-        setErrorGaleria(r.datos.problema);
+      const valor = r.datos.valor?.trim();
+      if (!valor) {
+        setErrorLectura(
+          r.datos.problema ??
+            `No se encontró ${textoObjetivo(activa.objetivo).etiqueta} en la foto.`
+        );
         return;
       }
-      aplicarExtraccion(r.datos);
+      escribirCampo(activa, { ...datosLeidos!, valor });
     } catch {
-      setErrorGaleria("No se pudo procesar la imagen.");
+      setErrorLectura("No se pudo procesar la imagen.");
     } finally {
-      setLeyendoGaleria(false);
+      setClaveLeyendo(null);
+      sesionFoto.current = null;
     }
   }
 
@@ -166,13 +193,46 @@ export function FaseDocumentos(
       ? "border-warn-500 focus:ring-warn-500/15"
       : undefined;
 
+  function abrirCamaraDe(activa: SesionEscaneo) {
+    if (!prepararEscaneo(activa)) return;
+    setCamaraAbierta(true);
+  }
+
+  function pedirFotoDe(activa: SesionEscaneo) {
+    if (!prepararEscaneo(activa)) return;
+    sesionFoto.current = activa;
+    galeriaRef.current?.click();
+  }
+
+  function accionesDe(activa: SesionEscaneo) {
+    if (bloqueado) return null;
+    const leyendo = claveLeyendo === activa.clave;
+    return (
+      <div className="mt-2 flex gap-2">
+        <Button size="sm" variant="secondary" disabled={leyendo} onClick={() => abrirCamaraDe(activa)}>
+          <ScanLine className="size-4" aria-hidden />
+          Escanear
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={leyendo}
+          onClick={() => pedirFotoDe(activa)}
+        >
+          <ImageIcon className="size-4" aria-hidden />
+          Foto
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <PantallaFase
       {...props}
       descripcion={
         bloqueado
           ? "Estos datos los precargó tu administrador. Solo puedes consultarlos."
-          : "Documentos que acompañan la carga. Deja en blanco lo que no aplique."
+          : "Documentos que acompañan la carga. Escanea cada número desde su campo, o déjalo en blanco si no aplica."
       }
       recolectar={() => ({
         factura,
@@ -205,45 +265,22 @@ export function FaseDocumentos(
               ))}
           </div>
         )}
-        {!bloqueado && (
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="secondary"
-              block
-              onClick={() => setEscaneando(true)}
-              className="justify-start"
-            >
-              <ScanLine className="size-5" aria-hidden />
-              Escanear documento
-            </Button>
-            <input
-              ref={galeriaRef}
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(e) => {
-                const archivo = e.target.files?.[0];
-                e.target.value = "";
-                if (archivo) void aplicarDesdeGaleria(archivo);
-              }}
-            />
-            <Button
-              variant="secondary"
-              block
-              loading={leyendoGaleria}
-              onClick={() => galeriaRef.current?.click()}
-              className="justify-start"
-            >
-              <ImageIcon className="size-5" aria-hidden />
-              Usar foto del teléfono
-            </Button>
-            {errorGaleria && (
-              <p role="alert" className="flex items-start gap-2 text-sm text-danger-600">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {errorGaleria}
-              </p>
-            )}
-          </div>
+        <input
+          ref={galeriaRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={(e) => {
+            const archivo = e.target.files?.[0];
+            e.target.value = "";
+            if (archivo) void aplicarDesdeGaleria(archivo);
+          }}
+        />
+        {errorLectura && (
+          <p role="alert" className="flex items-start gap-2 text-sm text-danger-600">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+            {errorLectura}
+          </p>
         )}
 
         {dudosos.length > 0 && (
@@ -261,7 +298,10 @@ export function FaseDocumentos(
           ayuda="Número de factura comercial o folio. Suele aparecer en la esquina superior, etiquetado como Factura, Invoice o Folio."
         >
           {(p) => (
-            <Input {...p} value={factura} disabled={bloqueado} className={cn(marcaDudoso("factura"))} onChange={(e) => setFactura(e.target.value)} />
+            <>
+              <Input {...p} value={factura} disabled={bloqueado} className={cn(marcaDudoso("factura"))} onChange={(e) => setFactura(e.target.value)} />
+              {accionesDe({ objetivo: { campo: "factura" }, clave: "factura", indiceOtro: null })}
+            </>
           )}
         </Field>
 
@@ -269,7 +309,12 @@ export function FaseDocumentos(
           label="Bill of Lading"
           ayuda="Número del Bill of Lading, guía o carta porte. Busca las siglas B/L, BL o “Bill of Lading” en el encabezado del conocimiento de embarque."
         >
-          {(p) => <Input {...p} value={bl} disabled={bloqueado} className={cn(marcaDudoso("billOfLading"))} onChange={(e) => setBl(e.target.value)} />}
+          {(p) => (
+            <>
+              <Input {...p} value={bl} disabled={bloqueado} className={cn(marcaDudoso("billOfLading"))} onChange={(e) => setBl(e.target.value)} />
+              {accionesDe({ objetivo: { campo: "billOfLading" }, clave: "billOfLading", indiceOtro: null })}
+            </>
+          )}
         </Field>
 
         <Field
@@ -277,7 +322,10 @@ export function FaseDocumentos(
           ayuda="Número de pedimento aduanal mexicano. Son 15 dígitos, a menudo con espacios (ej. 24 43 3456 4001234), en el encabezado del pedimento."
         >
           {(p) => (
-            <Input {...p} value={pedimento} disabled={bloqueado} className={cn(marcaDudoso("pedimento"))} onChange={(e) => setPedimento(e.target.value)} />
+            <>
+              <Input {...p} value={pedimento} disabled={bloqueado} className={cn(marcaDudoso("pedimento"))} onChange={(e) => setPedimento(e.target.value)} />
+              {accionesDe({ objetivo: { campo: "pedimento" }, clave: "pedimento", indiceOtro: null })}
+            </>
           )}
         </Field>
 
@@ -286,7 +334,14 @@ export function FaseDocumentos(
           ayuda="Número del sello fiscal o candado oficial que cierra la unidad. Está impreso en el sello físico y suele repetirse en el pedimento o el BL."
         >
           {(p) => (
-            <Input {...p} value={sellos} disabled={bloqueado} className={cn(marcaDudoso("sellosFiscales"))} onChange={(e) => setSellos(e.target.value)} />
+            <>
+              <Input {...p} value={sellos} disabled={bloqueado} className={cn(marcaDudoso("sellosFiscales"))} onChange={(e) => setSellos(e.target.value)} />
+              {accionesDe({
+                objetivo: { campo: "sellosFiscales" },
+                clave: "sellosFiscales",
+                indiceOtro: null,
+              })}
+            </>
           )}
         </Field>
 
@@ -320,7 +375,13 @@ export function FaseDocumentos(
                         prev.map((d, j) => (j === i ? { ...d, numero: e.target.value } : d))
                       )
                     }
+                    className={cn(marcaDudoso(`otro-${i}`))}
                   />
+                  {accionesDe({
+                    objetivo: { campo: "otro", titulo: doc.titulo },
+                    clave: `otro-${i}`,
+                    indiceOtro: i,
+                  })}
                 </div>
                 {!bloqueado && (
                   <button
@@ -349,13 +410,17 @@ export function FaseDocumentos(
         </div>
       </div>
 
-      {escaneando && (
+      {camaraAbierta && sesion && (
         <EscanerDocumentos
-          onExtraer={aplicarExtraccion}
-          onImagen={(blob, datos) => {
-            void archivarImagen(blob, datos);
+          objetivo={sesion.objetivo}
+          onExtraer={(datos) => escribirCampo(sesion, datos)}
+          onImagen={(blob) => {
+            void archivarImagen(blob, textoObjetivo(sesion.objetivo).etiqueta);
           }}
-          onCerrar={() => setEscaneando(false)}
+          onCerrar={() => {
+            setCamaraAbierta(false);
+            setSesion(null);
+          }}
         />
       )}
     </PantallaFase>

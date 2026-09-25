@@ -114,14 +114,15 @@ export function FilaInspeccion({
         </Link>
       </div>
 
+      {error && (
+        <p role="alert" className="border-t border-line px-4 pt-3 text-sm text-danger-600">
+          {error}
+        </p>
+      )}
+
       {/* ── Asignación ───────────────────────────────────────────────── */}
       {!cerrada && (
         <div className="border-t border-line p-4">
-          {error && (
-            <p role="alert" className="mb-2 text-sm text-danger-600">
-              {error}
-            </p>
-          )}
 
           <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-ink-secondary">
             <UserCog className="size-4 shrink-0" aria-hidden />

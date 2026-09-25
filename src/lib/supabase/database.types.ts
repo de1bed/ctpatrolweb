@@ -877,6 +877,10 @@ export type Database = {
         Args: { p_movimiento: string }
         Returns: number
       }
+      eliminar_inspeccion_empresa: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       registrar_empresa: {
         Args: {
           p_email: string

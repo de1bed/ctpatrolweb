@@ -320,33 +320,12 @@ export async function cancelarInspeccion(
 
 /** Baja lógica. La empresa deja de verla; el super admin la conserva 30 días. */
 export async function eliminarInspeccion(inspeccionId: string): Promise<Resultado> {
-  const sesion = await requerirAdmin();
+  await requerirAdmin();
   const supabase = await createClient();
 
-  const { data: actual } = await supabase
-    .from("inspections")
-    .select("id")
-    .eq("id", inspeccionId)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (!actual) return { ok: false, error: "No se encontró la inspección." };
-
-  await supabase.from("inspection_events").insert({
-    inspection_id: inspeccionId,
-    actor_id: sesion.userId,
-    event: "deleted",
-    payload: {} as Json,
+  const { error } = await supabase.rpc("eliminar_inspeccion_empresa", {
+    p_id: inspeccionId,
   });
-
-  const { error } = await supabase
-    .from("inspections")
-    .update({
-      deleted_at: new Date().toISOString(),
-      verification_revoked_at: new Date().toISOString(),
-    })
-    .eq("id", inspeccionId)
-    .is("deleted_at", null);
 
   if (error) return { ok: false, error: "No se pudo eliminar." };
 
