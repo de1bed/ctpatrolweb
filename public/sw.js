@@ -24,7 +24,7 @@
  * completa en una pantalla.
  */
 
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE_APP = `ctpatrol-app-${VERSION}`;
 
 /** Lo mínimo para que la app arranque sin red. */
@@ -77,6 +77,11 @@ self.addEventListener("activate", (evento) => {
   );
 });
 
+function esHtml(respuesta) {
+  var tipo = respuesta.headers.get("content-type") || "";
+  return tipo.indexOf("text/html") !== -1;
+}
+
 self.addEventListener("fetch", (evento) => {
   const { request } = evento;
 
@@ -94,17 +99,22 @@ self.addEventListener("fetch", (evento) => {
     evento.respondWith(
       fetch(request)
         .then((respuesta) => {
-          const copia = respuesta.clone();
-          caches.open(CACHE_APP).then((c) => c.put(request, copia));
+          const tipo = respuesta.headers.get("content-type") || "";
+          // Solo se guarda HTML. Una respuesta de datos de Next parece
+          // código fuente; si se cachea y luego se abre como página, el
+          // iPad muestra ese texto en lugar de la app.
+          if (respuesta.ok && tipo.indexOf("text/html") !== -1) {
+            const copia = respuesta.clone();
+            caches.open(CACHE_APP).then((c) => c.put(request, copia));
+          }
           return respuesta;
         })
         .catch(async () => {
           const cacheada = await caches.match(request);
-          if (cacheada) return cacheada;
-          // Cualquier ruta sin cachear cae al arranque: la app es una SPA
-          // una vez cargada y sabe reencaminar.
+          if (cacheada && esHtml(cacheada)) return cacheada;
+          const inicio = await caches.match("/");
+          if (inicio && esHtml(inicio)) return inicio;
           return (
-            (await caches.match("/")) ??
             new Response(
               "<!doctype html><meta charset=utf-8><title>Sin conexión</title>" +
                 "<p style='font:16px system-ui;padding:2rem'>Sin conexión. " +
@@ -126,7 +136,12 @@ self.addEventListener("fetch", (evento) => {
       (cacheada) =>
         cacheada ??
         fetch(request).then((respuesta) => {
-          if (respuesta.ok && respuesta.type === "basic") {
+          const tipo = respuesta.headers.get("content-type") || "";
+          const esPagina =
+            tipo.indexOf("text/html") !== -1 ||
+            tipo.indexOf("text/x-component") !== -1 ||
+            request.headers.get("RSC");
+          if (respuesta.ok && respuesta.type === "basic" && !esPagina) {
             const copia = respuesta.clone();
             caches.open(CACHE_APP).then((c) => c.put(request, copia));
           }
