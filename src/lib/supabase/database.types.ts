@@ -881,6 +881,14 @@ export type Database = {
         Args: { p_id: string }
         Returns: undefined
       }
+      eliminar_empresa_plataforma: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      eliminar_persona_plataforma: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       registrar_empresa: {
         Args: {
           p_email: string

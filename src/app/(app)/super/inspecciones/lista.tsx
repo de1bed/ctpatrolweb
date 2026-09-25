@@ -246,6 +246,7 @@ export function ListaSuper({
                   <div className="flex flex-col gap-4 px-4 py-4">
                     <ControlesEmpresa
                       empresaId={empresa.id}
+                      nombre={empresa.name}
                       autorizada={empresa.iaAutorizada}
                       creditos={empresa.creditos}
                       empresaActiva={empresa.activa}

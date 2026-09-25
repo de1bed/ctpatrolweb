@@ -1,25 +1,31 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
 
 import {
   autorizarIa,
   cambiarEmpresaActiva,
+  eliminarEmpresa,
   recargarCreditos,
+  renombrarEmpresa,
   type EstadoPlataforma,
 } from "./acciones";
+import { DialogoDosPasos } from "./dialogo";
 
 const INICIAL: EstadoPlataforma = { error: null };
 
 export function ControlesEmpresa({
   empresaId,
+  nombre,
   autorizada,
   creditos,
   empresaActiva,
 }: {
   empresaId: string;
+  nombre: string;
   autorizada: boolean;
   creditos: number;
   empresaActiva: boolean;
@@ -36,9 +42,38 @@ export function ControlesEmpresa({
     cambiarEmpresaActiva,
     INICIAL
   );
+  const [nombreEstado, enviarNombre, pendienteNombre] = useActionState(
+    renombrarEmpresa,
+    INICIAL
+  );
+  const [pasoBorrar, setPasoBorrar] = useState<0 | 1 | 2>(0);
+  const [errorBorrar, setErrorBorrar] = useState<string | null>(null);
+  const [pendienteBorrar, empezarBorrar] = useTransition();
 
   return (
     <div className="flex flex-col gap-3">
+      <form action={enviarNombre} className="flex flex-col gap-2">
+        <input type="hidden" name="empresaId" value={empresaId} />
+        <label htmlFor={`nombre-${empresaId}`} className="text-sm font-medium text-ink">
+          Nombre de la empresa
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id={`nombre-${empresaId}`}
+            name="nombre"
+            defaultValue={nombre}
+            required
+            minLength={2}
+            maxLength={120}
+            className="min-w-0 flex-1"
+          />
+          <Button type="submit" variant="secondary" size="sm" loading={pendienteNombre}>
+            Guardar
+          </Button>
+        </div>
+      </form>
+      {nombreEstado.error && <p className="text-sm text-danger-600">{nombreEstado.error}</p>}
+      {nombreEstado.ok && <p className="text-sm text-ok-700">{nombreEstado.ok}</p>}
       <form action={enviarAcceso}>
         <input type="hidden" name="empresaId" value={empresaId} />
         <input type="hidden" name="activa" value={empresaActiva ? "false" : "true"} />
@@ -109,6 +144,37 @@ export function ControlesEmpresa({
       </form>
       {recarga.error && <p className="text-sm text-danger-600">{recarga.error}</p>}
       {recarga.ok && <p className="text-sm text-ok-700">{recarga.ok}</p>}
+
+      <Button variant="danger" size="sm" onClick={() => setPasoBorrar(1)}>
+        Eliminar empresa
+      </Button>
+      {pasoBorrar > 0 && (
+        <DialogoDosPasos
+          titulo="Eliminar empresa"
+          mensaje={
+            pasoBorrar === 1
+              ? `¿Seguro que deseas eliminar ${nombre}?`
+              : "Se borra de verdad, con sus usuarios y sus inspecciones. Esos correos podrán registrarse otra vez. ¿Seguro que deseas eliminar?"
+          }
+          pendiente={pendienteBorrar}
+          error={errorBorrar}
+          onNo={() => {
+            setPasoBorrar(0);
+            setErrorBorrar(null);
+          }}
+          onSi={() => {
+            if (pasoBorrar === 1) {
+              setPasoBorrar(2);
+              return;
+            }
+            empezarBorrar(async () => {
+              const r = await eliminarEmpresa(empresaId);
+              if (r.error) setErrorBorrar(r.error);
+              else setPasoBorrar(0);
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

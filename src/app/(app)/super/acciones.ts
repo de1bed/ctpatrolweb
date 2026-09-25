@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requerirSuperAdmin } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, tryCreateAdminClient } from "@/lib/supabase/server";
 
 export type EstadoPlataforma = { error: string | null; ok?: string };
 
@@ -189,4 +189,117 @@ export async function cambiarMiembro(
   if (error) return { error: "No se pudo actualizar a esa persona." };
   refrescarPlataforma();
   return { error: null, ok: "Persona actualizada." };
+}
+
+const esquemaNombreEmpresa = z.object({
+  empresaId: z.string().uuid(),
+  nombre: z.string().trim().min(2, "Escribe el nombre").max(120),
+});
+
+export async function renombrarEmpresa(
+  _anterior: EstadoPlataforma,
+  formData: FormData
+): Promise<EstadoPlataforma> {
+  await requerirSuperAdmin();
+  const datos = esquemaNombreEmpresa.safeParse({
+    empresaId: formData.get("empresaId"),
+    nombre: formData.get("nombre"),
+  });
+  if (!datos.success) return { error: "Escribe un nombre de empresa válido." };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("company_accounts")
+    .update({ name: datos.data.nombre })
+    .eq("id", datos.data.empresaId);
+
+  if (error) return { error: "No se pudo cambiar el nombre." };
+  refrescarPlataforma();
+  return { error: null, ok: "Nombre de la empresa actualizado." };
+}
+
+const esquemaNombrePersona = z.object({
+  miembroId: z.string().uuid(),
+  nombre: z.string().trim().min(2, "Escribe el nombre").max(120),
+});
+
+export async function renombrarPersona(
+  _anterior: EstadoPlataforma,
+  formData: FormData
+): Promise<EstadoPlataforma> {
+  await requerirSuperAdmin();
+  const datos = esquemaNombrePersona.safeParse({
+    miembroId: formData.get("miembroId"),
+    nombre: formData.get("nombre"),
+  });
+  if (!datos.success) return { error: "Escribe un nombre válido." };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ full_name: datos.data.nombre })
+    .eq("id", datos.data.miembroId);
+
+  if (error) return { error: "No se pudo cambiar el nombre." };
+  refrescarPlataforma();
+  return { error: null, ok: "Nombre actualizado." };
+}
+
+function mensajeBorrado(error: { message?: string } | null, fallback: string): string {
+  const texto = error?.message ?? "";
+  if (texto.includes("super admin")) return "No se puede borrar la cuenta de un super admin.";
+  if (texto.includes("ti mismo")) return "No puedes borrarte a ti mismo.";
+  if (texto.includes("No se encontró")) return "No se encontró esa cuenta.";
+  return fallback;
+}
+
+async function rutasDeEvidencia(empresaId: string): Promise<string[]> {
+  const admin = tryCreateAdminClient();
+  if (!admin) return [];
+
+  const rutas: string[] = [];
+  let desde = 0;
+  for (;;) {
+    const { data } = await admin
+      .from("inspection_media")
+      .select("storage_path")
+      .eq("company_account_id", empresaId)
+      .range(desde, desde + 999);
+    const filas = data ?? [];
+    for (const fila of filas) {
+      if (fila.storage_path) rutas.push(fila.storage_path);
+    }
+    if (filas.length < 1000) break;
+    desde += 1000;
+  }
+  return rutas;
+}
+
+export async function eliminarEmpresa(empresaId: string): Promise<EstadoPlataforma> {
+  await requerirSuperAdmin();
+  const rutas = await rutasDeEvidencia(empresaId);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("eliminar_empresa_plataforma", { p_id: empresaId });
+  if (error) return { error: mensajeBorrado(error, "No se pudo eliminar la empresa.") };
+
+  const admin = tryCreateAdminClient();
+  if (admin && rutas.length > 0) {
+    for (let i = 0; i < rutas.length; i += 100) {
+      await admin.storage.from("inspection-media").remove(rutas.slice(i, i + 100));
+    }
+  }
+
+  refrescarPlataforma();
+  return { error: null, ok: "Empresa eliminada. Esos correos ya pueden registrarse." };
+}
+
+export async function eliminarPersona(miembroId: string): Promise<EstadoPlataforma> {
+  await requerirSuperAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("eliminar_persona_plataforma", { p_id: miembroId });
+  if (error) return { error: mensajeBorrado(error, "No se pudo eliminar a esa persona.") };
+
+  refrescarPlataforma();
+  return { error: null, ok: "Persona eliminada. Ese correo ya puede registrarse." };
 }
