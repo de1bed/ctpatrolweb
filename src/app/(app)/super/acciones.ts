@@ -8,6 +8,11 @@ import { createClient } from "@/lib/supabase/server";
 
 export type EstadoPlataforma = { error: string | null; ok?: string };
 
+function refrescarPlataforma() {
+  revalidatePath("/super");
+  revalidatePath("/super/inspecciones");
+}
+
 const esquemaAutorizar = z.object({
   empresaId: z.string().uuid(),
   autorizada: z.enum(["true", "false"]),
@@ -42,7 +47,7 @@ export async function autorizarIa(
     .eq("id", datos.data.empresaId);
 
   if (error) return { error: "No se pudo cambiar la autorización de IA." };
-  revalidatePath("/super");
+  refrescarPlataforma();
   return { error: null, ok: autorizada ? "IA autorizada." : "IA retirada." };
 }
 
@@ -94,7 +99,7 @@ export async function recargarCreditos(
       (aplicado > 0 ? "Recarga del super admin" : "Ajuste del super admin"),
   });
 
-  revalidatePath("/super");
+  refrescarPlataforma();
   revalidatePath("/");
   return {
     error: null,
@@ -129,7 +134,7 @@ export async function cambiarEmpresaActiva(
     .eq("id", datos.data.empresaId);
 
   if (error) return { error: "No se pudo cambiar el estado de la empresa." };
-  revalidatePath("/super");
+  refrescarPlataforma();
   return {
     error: null,
     ok: activa
@@ -182,6 +187,6 @@ export async function cambiarMiembro(
     .eq("id", datos.data.miembroId);
 
   if (error) return { error: "No se pudo actualizar a esa persona." };
-  revalidatePath("/super");
+  refrescarPlataforma();
   return { error: null, ok: "Persona actualizada." };
 }

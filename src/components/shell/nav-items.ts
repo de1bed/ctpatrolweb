@@ -33,7 +33,7 @@ export const NAV_OPERATIVO: ItemNav[] = [
   { href: "/inspecciones", etiqueta: "Inspecciones", icono: ClipboardList },
   { href: "/expedientes", etiqueta: "Expedientes", icono: FolderOpen },
   { href: "/admin", etiqueta: "Admin", icono: ShieldCheck, soloAdmin: true },
-  { href: "/super", etiqueta: "Plataforma", icono: Shield, soloSuper: true },
+  { href: "/super/inspecciones", etiqueta: "Plataforma", icono: Shield, soloSuper: true },
 ];
 
 export const NAV_AJUSTES: ItemNav = {

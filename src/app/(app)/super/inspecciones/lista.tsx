@@ -13,6 +13,9 @@ import { Input } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
 import type { Database } from "@/lib/supabase/database.types";
 
+import { ControlesEmpresa } from "../controles";
+import { ListaMiembros, type PersonaEmpresa } from "../miembros";
+
 export type FilaSuper = {
   id: string;
   display_id: string;
@@ -29,6 +32,13 @@ export type GrupoSuper = {
   id: string;
   name: string;
   code: string;
+  activa: boolean;
+  iaAutorizada: boolean;
+  iaEncendida: boolean;
+  creditos: number;
+  usosIa: number;
+  admins: PersonaEmpresa[];
+  participantes: PersonaEmpresa[];
   filas: FilaSuper[];
 };
 
@@ -57,6 +67,22 @@ function fechaVisible(fila: FilaSuper): string {
   return format(new Date(iso), "d MMM yyyy, HH:mm", { locale: es });
 }
 
+function textoEmpresa(empresa: GrupoSuper): string {
+  const gente = [...empresa.admins, ...empresa.participantes]
+    .map((persona) => `${persona.nombre} ${persona.email}`)
+    .join(" ");
+  return normalizar(
+    [
+      empresa.name,
+      empresa.code,
+      empresa.activa ? "activa" : "suspendida",
+      empresa.iaAutorizada ? "ia autorizada" : "sin autorizar",
+      empresa.iaEncendida ? "ia encendida" : "ia apagada",
+      `${empresa.creditos} creditos`,
+      gente,
+    ].join(" ")
+  );
+}
 function textoBusqueda(empresa: GrupoSuper, fila: FilaSuper): string {
   return normalizar(
     [
@@ -78,9 +104,11 @@ function textoBusqueda(empresa: GrupoSuper, fila: FilaSuper): string {
 export function ListaSuper({
   grupos,
   recortada,
+  yoId,
 }: {
   grupos: GrupoSuper[];
   recortada: boolean;
+  yoId: string;
 }) {
   const [consulta, setConsulta] = useState("");
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
@@ -88,16 +116,17 @@ export function ListaSuper({
   const palabras = normalizar(consulta).split(/\s+/).filter(Boolean);
   const buscando = palabras.length > 0;
 
-  const visibles = grupos
-    .map((empresa) => ({
-      ...empresa,
-      filas: buscando
-        ? empresa.filas.filter((fila) =>
-            palabras.every((palabra) => textoBusqueda(empresa, fila).includes(palabra))
-          )
-        : empresa.filas,
-    }))
-    .filter((empresa) => empresa.filas.length > 0);
+  const visibles = grupos.flatMap((empresa) => {
+    const coincideEmpresa =
+      !buscando || palabras.every((palabra) => textoEmpresa(empresa).includes(palabra));
+    const filas = coincideEmpresa
+      ? empresa.filas
+      : empresa.filas.filter((fila) =>
+          palabras.every((palabra) => textoBusqueda(empresa, fila).includes(palabra))
+        );
+    if (buscando && !coincideEmpresa && filas.length === 0) return [];
+    return [{ ...empresa, filas }];
+  });
 
   const totalFilas = visibles.reduce((n, empresa) => n + empresa.filas.length, 0);
 
@@ -153,7 +182,7 @@ export function ListaSuper({
         <Card className="p-6 text-sm text-ink-secondary">
           {buscando
             ? `Nada coincide con «${consulta.trim()}».`
-            : "No hay inspecciones."}
+            : "No hay empresas."}
         </Card>
       )}
 
@@ -164,7 +193,23 @@ export function ListaSuper({
             : abiertas.has(empresa.id);
           const panelId = `empresa-${empresa.id}`;
           const eliminadas = empresa.filas.filter((fila) => fila.deleted_at).length;
-          const ultima = format(new Date(empresa.filas[0].updated_at), "d MMM yyyy", { locale: es });
+          const ultima = empresa.filas[0]
+            ? format(new Date(empresa.filas[0].updated_at), "d MMM yyyy", { locale: es })
+            : null;
+          const estadoEmpresa = [
+            empresa.code,
+            empresa.activa ? "Activa" : "Suspendida",
+            `${empresa.creditos} créditos`,
+            empresa.iaAutorizada
+              ? empresa.iaEncendida
+                ? "IA encendida"
+                : "IA autorizada"
+              : "Sin IA",
+            ultima ? `última ${ultima}` : "sin inspecciones",
+            eliminadas > 0 ? `${eliminadas} eliminada${eliminadas === 1 ? "" : "s"}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
 
           return (
             <section key={empresa.id} className="overflow-hidden rounded-2xl border border-line bg-surface">
@@ -183,11 +228,13 @@ export function ListaSuper({
                   aria-hidden
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-ink">{empresa.name}</span>
-                  <span className="mt-0.5 block truncate text-xs text-ink-muted">
-                    {empresa.code} · última {ultima}
-                    {eliminadas > 0 && ` · ${eliminadas} eliminada${eliminadas === 1 ? "" : "s"}`}
-                  </span>
+                  <span
+                    className={cn(
+                      "block truncate font-semibold",
+                      empresa.activa ? "text-ink" : "text-danger-700 dark:text-danger-500"
+                    )}
+                  >{empresa.name}</span>
+                  <span className="mt-0.5 block truncate text-xs text-ink-muted">{estadoEmpresa}</span>
                 </span>
                 <span className="rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-semibold text-ink-secondary">
                   {empresa.filas.length}
@@ -195,35 +242,67 @@ export function ListaSuper({
               </button>
 
               {abierta && (
-                <div id={panelId} className="divide-y divide-line border-t border-line">
-                  {empresa.filas.map((fila) => {
-                    const detalle = [fila.customer_name, fila.tractor_number, fila.driver_name]
-                      .filter(Boolean)
-                      .join(" · ");
-                    return (
-                      <Link
-                        key={fila.id}
-                        href={`/inspeccion/${fila.id}/reporte`}
-                        className="flex flex-col gap-1 px-4 py-3 active:bg-surface-sunken"
-                      >
-                        <span className="flex flex-wrap items-center gap-2">
-                          <StatusBadge estado={fila.status} />
-                          {fila.deleted_at && (
-                            <span className="inline-flex items-center rounded-full border border-danger-500/40 bg-danger-50 px-2.5 py-1 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
-                              Eliminada
-                            </span>
-                          )}
-                          <span className="font-mono text-sm font-medium text-ink">
-                            {fila.display_id}
-                          </span>
-                        </span>
-                        <span className="text-sm text-ink-secondary">
-                          {detalle || "Sin transportista"}
-                        </span>
-                        <span className="text-xs text-ink-muted">{fechaVisible(fila)}</span>
-                      </Link>
-                    );
-                  })}
+                <div id={panelId} className="border-t border-line">
+                  <div className="flex flex-col gap-4 px-4 py-4">
+                    <ControlesEmpresa
+                      empresaId={empresa.id}
+                      autorizada={empresa.iaAutorizada}
+                      creditos={empresa.creditos}
+                      empresaActiva={empresa.activa}
+                    />
+                    <p className="text-xs text-ink-muted">
+                      {empresa.usosIa} {empresa.usosIa === 1 ? "uso" : "usos"} de IA
+                    </p>
+                    <ListaMiembros titulo="Admins" personas={empresa.admins} yoId={yoId} />
+                    <ListaMiembros
+                      titulo="Participantes"
+                      personas={empresa.participantes}
+                      yoId={yoId}
+                    />
+                    {empresa.admins.length + empresa.participantes.length === 0 && (
+                      <p className="text-sm text-ink-muted">Esta empresa no tiene personas.</p>
+                    )}
+                  </div>
+
+                  <div className="border-t border-line">
+                    <p className="px-4 pt-3 text-xs font-bold uppercase tracking-wider text-ink-muted">
+                      Inspecciones · {empresa.filas.length}
+                    </p>
+                    {empresa.filas.length === 0 ? (
+                      <p className="px-4 py-3 text-sm text-ink-secondary">Sin inspecciones.</p>
+                    ) : (
+                      <div className="divide-y divide-line">
+                        {empresa.filas.map((fila) => {
+                          const detalle = [fila.customer_name, fila.tractor_number, fila.driver_name]
+                            .filter(Boolean)
+                            .join(" · ");
+                          return (
+                            <Link
+                              key={fila.id}
+                              href={`/inspeccion/${fila.id}/reporte`}
+                              className="flex flex-col gap-1 px-4 py-3 active:bg-surface-sunken"
+                            >
+                              <span className="flex flex-wrap items-center gap-2">
+                                <StatusBadge estado={fila.status} />
+                                {fila.deleted_at && (
+                                  <span className="inline-flex items-center rounded-full border border-danger-500/40 bg-danger-50 px-2.5 py-1 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
+                                    Eliminada
+                                  </span>
+                                )}
+                                <span className="font-mono text-sm font-medium text-ink">
+                                  {fila.display_id}
+                                </span>
+                              </span>
+                              <span className="text-sm text-ink-secondary">
+                                {detalle || "Sin transportista"}
+                              </span>
+                              <span className="text-xs text-ink-muted">{fechaVisible(fila)}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </section>
