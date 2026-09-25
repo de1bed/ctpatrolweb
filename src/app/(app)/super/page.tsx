@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import Link from "next/link";
+
 import { AppHeader } from "@/components/shell/app-header";
 import { Card } from "@/components/ui/card";
 import { requerirSuperAdmin } from "@/lib/auth";
@@ -25,7 +27,7 @@ export default async function SuperPage() {
         .from("profiles")
         .select("id, full_name, email, role, is_active, company_account_id, created_at")
         .order("full_name"),
-      supabase.from("inspections").select("company_account_id"),
+      supabase.from("inspections").select("company_account_id").is("deleted_at", null),
       supabase
         .from("ia_movimientos")
         .select("company_account_id")
@@ -74,9 +76,14 @@ export default async function SuperPage() {
           {(empresas ?? []).length} empresas · {totalAdmins} admins · {totalPersonas}{" "}
           personas · {(inspecciones ?? []).length} inspecciones
         </p>
-        <p className="mb-5 text-sm text-ink-secondary">
+        <p className="mb-3 text-sm text-ink-secondary">
           Suspender una empresa cierra la sesión de todo su equipo. Tú sigues
           entrando para poder reactivarla.
+        </p>
+        <p className="mb-5">
+          <Link href="/super/inspecciones" className="text-sm font-medium text-brand-600">
+            Ver inspecciones de todas las empresas
+          </Link>
         </p>
         <div className="flex flex-col gap-4">
           {(empresas ?? []).map((empresa) => {

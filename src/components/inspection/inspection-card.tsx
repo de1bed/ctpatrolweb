@@ -1,9 +1,8 @@
-import { formatDistanceToNow, format } from "date-fns";
-import { es } from "date-fns/locale";
 import { ChevronRight, ShieldAlert, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
+import { fechaEnLista } from "@/lib/calendario";
 import { cn } from "@/lib/cn";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -75,12 +74,7 @@ export function InspectionCard({
           </p>
 
           <p className="mt-1 text-xs text-ink-muted">
-            {cerrada
-              ? format(new Date(fecha), "d 'de' MMMM, HH:mm", { locale: es })
-              : formatDistanceToNow(new Date(fecha), {
-                  addSuffix: true,
-                  locale: es,
-                })}
+            {fechaEnLista(fecha)}
             {mostrarResultado &&
               (inspeccion.findings_count ?? 0) > 0 &&
               ` · ${inspeccion.findings_count} ${

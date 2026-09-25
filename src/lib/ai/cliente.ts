@@ -46,7 +46,7 @@ export function openai(): OpenAI {
  * que es justo lo que se necesita cuando sale uno mejor o más barato.
  */
 export function modeloVision(): string {
-  return process.env.OPENAI_VISION_MODEL || "gpt-4o";
+  return process.env.OPENAI_VISION_MODEL || "gpt-4.1";
 }
 
 /** Tope de llamadas por inspección, para que un bug no se coma el presupuesto. */

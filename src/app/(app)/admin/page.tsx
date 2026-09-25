@@ -13,6 +13,8 @@ import type { Metadata } from "next";
 
 import { InspectionCard } from "@/components/inspection/inspection-card";
 import { Card } from "@/components/ui/card";
+
+import { MetricasAdmin, type Cierre } from "./metricas";
 import { requerirAdmin } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/server";
@@ -47,6 +49,7 @@ export default async function AdminResumenPage() {
     completadasMes,
     inspectores,
     recientes,
+    cierresMes,
   ] = await Promise.all([
     conteo("in_progress"),
     conteo("paused"),
@@ -84,7 +87,22 @@ export default async function AdminResumenPage() {
       .order("updated_at", { ascending: false })
       .limit(6)
       .then((r) => r.data ?? []),
+    supabase
+      .from("inspections")
+      .select("assigned_to, duration_seconds, passed, completed_at")
+      .eq("status", "completed")
+      .gte("completed_at", hace30)
+      .limit(1000)
+      .then((r) => (r.data ?? []) as Cierre[]),
   ]);
+
+  const idsInspectores = [
+    ...new Set(cierresMes.map((c) => c.assigned_to).filter((id): id is string => Boolean(id))),
+  ];
+  const { data: perfiles } = idsInspectores.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", idsInspectores)
+    : { data: [] };
+  const nombres = new Map((perfiles ?? []).map((p) => [p.id, p.full_name]));
 
   const tasaRechazo =
     completadasMes > 0 ? Math.round((rechazadasMes / completadasMes) * 100) : 0;
@@ -225,6 +243,8 @@ export default async function AdminResumenPage() {
           </div>
         </Card>
       </div>
+
+      <MetricasAdmin cierres={cierresMes} nombres={nombres} />
 
       {/* ── Actividad reciente ─────────────────────────────────────────── */}
       <section className="mt-8">

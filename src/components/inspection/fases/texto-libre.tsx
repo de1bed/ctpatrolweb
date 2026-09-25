@@ -1,7 +1,7 @@
 "use client";
 
 import { ImageIcon, Plus, ScanLine, Thermometer, Trash2, TriangleAlert } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PantallaFase } from "@/components/inspection/phase-shell";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,55 @@ import { OptionCards } from "@/components/ui/option-cards";
 import { EscanerDocumentos, procesarImagenDocumento } from "@/components/inspection/document-scanner";
 import { cn } from "@/lib/cn";
 import type { Extraccion } from "@/lib/ai/ocr";
+import { fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
+import { capturarDeArchivo } from "@/lib/media/camara";
 
 import { previo, type PropsFase } from "./tipos";
 
 type OtroDoc = { titulo: string; numero: string };
 
+function MiniaturaDocumento({ foto }: { foto: FotoLocal }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!foto.blob || foto.blob.size === 0) return;
+    const creada = URL.createObjectURL(foto.blob);
+    setUrl(creada);
+    return () => URL.revokeObjectURL(creada);
+  }, [foto]);
+
+  return (
+    <figure className="w-24 shrink-0">
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={foto.puntoNombre} className="aspect-[3/4] w-full rounded-lg object-cover" />
+      ) : (
+        <div className="aspect-[3/4] w-full rounded-lg bg-surface-sunken" />
+      )}
+      <figcaption className="mt-1 truncate text-xs text-ink-secondary">{foto.puntoNombre}</figcaption>
+    </figure>
+  );
+}
+
 /** Fase · Documentos de entrada. */
-export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
+function etiquetaDocumento(datos: Extraccion | null, orden: number): string {
+  const tipo = datos?.tipoDocumento?.trim();
+  if (tipo && tipo.toLowerCase() !== "documento") return tipo;
+  if (datos?.factura) return "Factura";
+  if (datos?.billOfLading) return "Bill of Lading";
+  if (datos?.pedimento) return "Pedimento";
+  if (datos?.sellosFiscales) return "Sellos fiscales";
+  return `Documento ${orden}`;
+}
+
+export function FaseDocumentos(
+  props: PropsFase & {
+    soloLectura?: boolean;
+    latitud?: number | null;
+    longitud?: number | null;
+    fotosServidor?: { id: string; nombre: string; url: string }[];
+  }
+) {
   const [factura, setFactura] = useState(() => previo(props.datosPrevios, "factura", ""));
   const [bl, setBl] = useState(() => previo(props.datosPrevios, "billOfLading", ""));
   const [pedimento, setPedimento] = useState(() => previo(props.datosPrevios, "pedimento", ""));
@@ -34,8 +76,51 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
   // Campos que la IA leyó con duda. Se resaltan para que el inspector los
   // coteje contra el papel en vez de darlos por buenos.
   const [dudosos, setDudosos] = useState<string[]>([]);
+  const [fotosDoc, setFotosDoc] = useState<FotoLocal[]>([]);
 
   const bloqueado = props.soloLectura ?? false;
+
+  useEffect(() => {
+    let vivo = true;
+    fotosDePaso(props.inspeccionId, props.clavePaso)
+      .then((lista) => {
+        if (vivo) setFotosDoc(lista.sort((a, b) => a.capturadaEn.localeCompare(b.capturadaEn)));
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [props.inspeccionId, props.clavePaso]);
+
+  async function archivarImagen(blob: Blob, datos: Extraccion | null) {
+    const orden = fotosDoc.length + 1;
+    const etiqueta = etiquetaDocumento(datos, orden);
+    const capturadaEn = new Date().toISOString();
+    const foto = await capturarDeArchivo(
+      blob,
+      {
+        capturadaEn,
+        latitud: props.latitud ?? null,
+        longitud: props.longitud ?? null,
+      },
+      etiqueta
+    );
+    const guardada = await guardarFoto({
+      clientId: crypto.randomUUID(),
+      inspeccionId: props.inspeccionId,
+      paso: props.clavePaso,
+      puntoClave: `documento-${crypto.randomUUID()}`,
+      puntoNombre: etiqueta,
+      blob: foto.blob,
+      mimeType: foto.mimeType,
+      ancho: foto.ancho,
+      alto: foto.alto,
+      capturadaEn,
+      latitud: props.latitud ?? null,
+      longitud: props.longitud ?? null,
+    });
+    setFotosDoc((prev) => [...prev, guardada]);
+  }
 
   function aplicarExtraccion(datos: Extraccion) {
     // Solo se rellenan los campos VACÍOS: si el inspector ya escribió algo a
@@ -52,7 +137,14 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
     setLeyendoGaleria(true);
     setErrorGaleria(null);
     try {
+      let datosLeidos: Extraccion | null = null;
       const r = await procesarImagenDocumento(archivo);
+      if (r.ok) datosLeidos = r.datos;
+      try {
+        await archivarImagen(archivo, datosLeidos);
+      } catch {
+        setErrorGaleria("La foto no se pudo guardar en el dispositivo.");
+      }
       if (!r.ok) {
         setErrorGaleria(r.error);
         return;
@@ -91,6 +183,28 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
       })}
     >
       <div className="flex flex-col gap-5">
+        {(fotosDoc.length > 0 || (props.fotosServidor?.length ?? 0) > 0) && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {fotosDoc.map((foto) => (
+              <MiniaturaDocumento key={foto.clientId} foto={foto} />
+            ))}
+            {(props.fotosServidor ?? [])
+              .filter((s) => !fotosDoc.some((f) => f.mediaId === s.id))
+              .map((foto) => (
+                <figure key={foto.id} className="w-24 shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={foto.url}
+                    alt={foto.nombre}
+                    className="aspect-[3/4] w-full rounded-lg object-cover"
+                  />
+                  <figcaption className="mt-1 truncate text-xs text-ink-secondary">
+                    {foto.nombre}
+                  </figcaption>
+                </figure>
+              ))}
+          </div>
+        )}
         {!bloqueado && (
           <div className="flex flex-col gap-2">
             <Button
@@ -238,6 +352,9 @@ export function FaseDocumentos(props: PropsFase & { soloLectura?: boolean }) {
       {escaneando && (
         <EscanerDocumentos
           onExtraer={aplicarExtraccion}
+          onImagen={(blob, datos) => {
+            void archivarImagen(blob, datos);
+          }}
           onCerrar={() => setEscaneando(false)}
         />
       )}

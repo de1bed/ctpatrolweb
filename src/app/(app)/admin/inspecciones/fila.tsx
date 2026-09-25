@@ -1,8 +1,8 @@
 "use client";
 
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Ban, ExternalLink, ShieldAlert, ShieldCheck, UserCog } from "lucide-react";
+import { Ban, ExternalLink, ShieldAlert, ShieldCheck, Trash2, UserCog } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -10,11 +10,16 @@ import { StatusBadge } from "@/components/inspection/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { aDatetimeLocal } from "@/lib/calendario";
+import { aDatetimeLocal, fechaEnLista } from "@/lib/calendario";
 import { cn } from "@/lib/cn";
 import type { Database } from "@/lib/supabase/database.types";
 
-import { asignarInspeccion, cancelarInspeccion, programarInspeccion } from "./acciones";
+import {
+  asignarInspeccion,
+  cancelarInspeccion,
+  eliminarInspeccion,
+  programarInspeccion,
+} from "./acciones";
 import { RevocarQr } from "@/app/(flujo)/inspeccion/[id]/reporte/revocar";
 
 export type InspeccionAdmin = {
@@ -45,6 +50,7 @@ export function FilaInspeccion({
   const [pendiente, empezar] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [cancelando, setCancelando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [motivo, setMotivo] = useState("");
 
   const cerrada =
@@ -95,10 +101,7 @@ export function FilaInspeccion({
                 {" · "}
               </>
             )}
-            {formatDistanceToNow(
-              new Date(inspeccion.completed_at ?? inspeccion.updated_at),
-              { addSuffix: true, locale: es }
-            )}
+            {fechaEnLista(inspeccion.completed_at ?? inspeccion.updated_at)}
           </p>
         </div>
 
@@ -243,6 +246,43 @@ export function FilaInspeccion({
           )}
         </div>
       )}
+
+      <div className="border-t border-line px-4 py-3">
+        {eliminando ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-ink-secondary">
+              Deja de verse en tu empresa. CTPatrol la conserva 30 días.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setEliminando(false)}
+              >
+                No eliminar
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                loading={pendiente}
+                onClick={() =>
+                  empezar(async () => {
+                    const r = await eliminarInspeccion(inspeccion.id);
+                    if (!r.ok) setError(r.error);
+                  })
+                }
+              >
+                Eliminar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="secondary" onClick={() => setEliminando(true)}>
+            <Trash2 className="size-4" aria-hidden />
+            Eliminar
+          </Button>
+        )}
+      </div>
 
       {inspeccion.status === "completed" &&
         inspeccion.verification_token &&

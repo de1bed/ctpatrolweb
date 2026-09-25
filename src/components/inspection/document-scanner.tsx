@@ -12,7 +12,8 @@ import { blobAJpegBase64 } from "@/lib/media/imagen";
 
 /**
  * Procesa una imagen de documento: JPEG en el dispositivo, IA en el servidor
- * si está configurada, y OCR local como respaldo.
+ * si está configurada, y OCR local como respaldo. La foto se archiva aparte,
+ * como evidencia de la fase.
  */
 export async function procesarImagenDocumento(blob: Blob): Promise<
   { ok: true; datos: Extraccion } | { ok: false; error: string }
@@ -62,9 +63,12 @@ export async function procesarImagenDocumento(blob: Blob): Promise<
  */
 export function EscanerDocumentos({
   onExtraer,
+  onImagen,
   onCerrar,
 }: {
   onExtraer: (datos: Extraccion) => void;
+  /** La foto se archiva aunque la lectura falle. */
+  onImagen: (blob: Blob, datos: Extraccion | null) => void;
   onCerrar: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -166,7 +170,16 @@ export function EscanerDocumentos({
     }
 
     try {
-      await aplicarResultado(await procesarImagenDocumento(blob));
+      let datos: Extraccion | null = null;
+      let resultado: { ok: true; datos: Extraccion } | { ok: false; error: string } | null =
+        null;
+      try {
+        resultado = await procesarImagenDocumento(blob);
+        if (resultado.ok) datos = resultado.datos;
+      } finally {
+        onImagen(blob, datos);
+      }
+      if (resultado) await aplicarResultado(resultado);
     } catch {
       setError("No se pudo procesar la imagen.");
       setEstado(streamRef.current ? "lista" : "error");
@@ -257,7 +270,7 @@ export function EscanerDocumentos({
 
         <p className="flex items-center gap-1.5 pb-2 text-center text-xs text-white/60">
           <ImageIcon className="size-3.5" aria-hidden />
-          La foto del documento no se guarda: solo se usa para leer los números.
+          La foto se guarda como evidencia, con fecha y ubicación.
         </p>
       </div>
     </div>

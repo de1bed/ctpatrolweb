@@ -1,10 +1,12 @@
 import {
   addDays,
   addMonths,
+  differenceInDays,
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
   format,
+  formatDistanceToNow,
   isSameMonth,
   startOfMonth,
   startOfWeek,
@@ -83,6 +85,17 @@ const COLORES = [
   "bg-ink text-white",
   "bg-danger-600 text-white",
 ] as const;
+
+/** Hasta aquí “hace 2 días” se entiende. Después, la fecha. */
+const DIAS_RELATIVO = 7;
+
+export function fechaEnLista(iso: string): string {
+  const fecha = new Date(iso);
+  if (differenceInDays(new Date(), fecha) < DIAS_RELATIVO) {
+    return formatDistanceToNow(fecha, { addSuffix: true, locale: es });
+  }
+  return format(fecha, "d MMM yyyy, HH:mm", { locale: es });
+}
 
 export function colorPorId(id: string | null): string {
   if (!id) return "bg-surface-sunken text-ink-secondary border border-line";

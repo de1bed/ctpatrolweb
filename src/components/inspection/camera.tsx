@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, ImagePlus, LoaderCircle, TriangleAlert, X } from "lucide-react";
+import { Camera, LoaderCircle, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,6 @@ export function CamaraPantallaCompleta({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const archivoCamaraRef = useRef<HTMLInputElement>(null);
-  const archivoGaleriaRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [estado, setEstado] = useState<"abriendo" | "lista" | "error">("abriendo");
@@ -172,20 +171,6 @@ export function CamaraPantallaCompleta({
           });
         }}
       />
-      <input
-        ref={archivoGaleriaRef}
-        type="file"
-        accept="image/*"
-        className="absolute h-px w-px opacity-0"
-        onChange={(e) => {
-          const archivo = e.target.files?.[0];
-          if (!archivo) return;
-          void desdeArchivo(archivo).finally(() => {
-            e.target.value = "";
-          });
-        }}
-      />
-
       <div className="flex items-center gap-3 px-gutter pt-safe">
         <div className="flex min-h-14 flex-1 items-center">
           <p className="truncate text-base font-semibold text-white">
@@ -252,20 +237,7 @@ export function CamaraPantallaCompleta({
           <p className="text-center text-sm text-warn-400">{error}</p>
         )}
 
-        <div className="flex h-28 w-full items-center justify-center gap-8">
-          <button
-            type="button"
-            onClick={() => archivoGaleriaRef.current?.click()}
-            disabled={capturando}
-            aria-label="Elegir una imagen"
-            className="flex flex-col items-center gap-1 text-white/90 disabled:opacity-40"
-          >
-            <span className="flex size-14 items-center justify-center rounded-full border-2 border-white/70">
-              <ImagePlus className="size-6" aria-hidden />
-            </span>
-            <span className="text-xs font-medium">Galería</span>
-          </button>
-
+        <div className="flex h-28 w-full items-center justify-center">
           <button
             type="button"
             onClick={disparar}
@@ -279,8 +251,6 @@ export function CamaraPantallaCompleta({
               <span className="size-[58px] rounded-full bg-white" />
             )}
           </button>
-
-          <span className="w-14" aria-hidden />
         </div>
 
         {estado === "error" && (
@@ -294,15 +264,6 @@ export function CamaraPantallaCompleta({
             >
               {!capturando && <Camera className="size-5" aria-hidden />}
               Tomar foto con la cámara
-            </Button>
-            <Button
-              size="lg"
-              block
-              variant="secondary"
-              onClick={() => archivoGaleriaRef.current?.click()}
-              disabled={capturando}
-            >
-              Elegir una imagen
             </Button>
           </div>
         )}

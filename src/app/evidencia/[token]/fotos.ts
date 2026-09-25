@@ -45,6 +45,7 @@ export async function fotosDeVerificacion(
     .eq("inspection_id", inspeccion.id)
     .not("storage_path", "is", null)
     .in("kind", ["photo", "video"])
+    .neq("phase", "documentos")
     .order("phase")
     .order("sort_order");
 

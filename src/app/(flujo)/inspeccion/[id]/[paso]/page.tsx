@@ -170,8 +170,39 @@ export default async function PasoPage({
     // ── Documentos: puede venir precargado desde el panel ─────────────────
     case "documentos": {
       const permisos = await obtenerPermisos(sesion);
+      const { data: mediaDocs } = await supabase
+        .from("inspection_media")
+        .select("id, point_label, storage_path, captured_at")
+        .eq("inspection_id", id)
+        .eq("phase", clavePaso)
+        .not("storage_path", "is", null)
+        .order("captured_at");
+
+      const rutasDocs = (mediaDocs ?? [])
+        .map((m) => m.storage_path)
+        .filter((p): p is string => Boolean(p));
+      const { data: firmadosDocs } = rutasDocs.length
+        ? await supabase.storage.from("inspection-media").createSignedUrls(rutasDocs, 60 * 60)
+        : { data: [] };
+      const urlDoc = new Map<string, string>();
+      for (const f of firmadosDocs ?? []) {
+        if (f.path && f.signedUrl) urlDoc.set(f.path, f.signedUrl);
+      }
+
+      const fotosServidor = (mediaDocs ?? []).flatMap((m) => {
+        const url = m.storage_path ? urlDoc.get(m.storage_path) : undefined;
+        if (!url) return [];
+        return [{ id: m.id, nombre: m.point_label ?? "Documento", url }];
+      });
+
       return (
-        <FaseDocumentos {...base} soloLectura={!permisos.puedeEditarDocumentos} />
+        <FaseDocumentos
+          {...base}
+          soloLectura={!permisos.puedeEditarDocumentos}
+          latitud={inspeccion.latitude}
+          longitud={inspeccion.longitude}
+          fotosServidor={fotosServidor}
+        />
       );
     }
 

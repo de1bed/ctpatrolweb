@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { requerirSesion } from "@/lib/auth";
-import { construirFlujo } from "@/lib/inspection/flujo";
+import { construirFlujo, faseIdDeClave } from "@/lib/inspection/flujo";
 import { leerProgreso } from "@/lib/inspection/progreso";
 import { calcularResultado } from "@/lib/inspection/resultado";
 import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
@@ -64,7 +64,12 @@ export default async function ReportePage({
   // Fotos y videos se separan: un <img> apuntando a un mp4 sale roto, y el
   // clip de sello necesita reproductor, no marco de imagen.
   const todaLaEvidencia = evidencia ?? [];
-  const fotos = todaLaEvidencia.filter((m) => m.kind !== "video");
+  const fotosDocumento = todaLaEvidencia.filter(
+    (m) => m.kind !== "video" && faseIdDeClave(m.phase) === "documentos"
+  );
+  const fotos = todaLaEvidencia.filter(
+    (m) => m.kind !== "video" && faseIdDeClave(m.phase) !== "documentos"
+  );
   const videos = todaLaEvidencia.filter((m) => m.kind === "video");
 
   // Enlaces firmados de vida corta. El bucket es privado: la evidencia no
@@ -219,6 +224,8 @@ export default async function ReportePage({
           <p style={{ margin: 0 }}>
             Se revisaron {contarPuntos(datos, fasesVisuales)} puntos de inspección
             con {fotos.length} evidencias fotográficas
+            {fotosDocumento.length > 0 &&
+              ` y ${fotosDocumento.length} ${fotosDocumento.length === 1 ? "documento" : "documentos"}`}
             {videos.length > 0 && ` y ${videos.length} ${videos.length === 1 ? "clip" : "clips"} de sello`}.{" "}
             {resultado.hallazgos === 0 ? (
               <>No se registraron hallazgos.</>
@@ -284,6 +291,13 @@ export default async function ReportePage({
             </section>
           );
         })}
+
+        {/* ── Documentos ──────────────────────────────────────────────── */}
+        <DocumentosReporte
+          datos={datos["documentos"]}
+          fotos={fotosDocumento}
+          urlPorRuta={urlPorRuta}
+        />
 
         {/* ── Evidencia fotográfica ───────────────────────────────────── */}
         {fotos.length > 0 && (
@@ -484,6 +498,106 @@ export default async function ReportePage({
       )}
     </>
   );
+}
+
+function DocumentosReporte({
+  datos,
+  fotos,
+  urlPorRuta,
+}: {
+  datos: Record<string, unknown> | undefined;
+  fotos: {
+    id: string;
+    point_label: string | null;
+    point_key: string | null;
+    storage_path: string | null;
+    captured_at: string;
+    latitude: number | null;
+    longitude: number | null;
+  }[];
+  urlPorRuta: Map<string, string>;
+}) {
+  const factura = textoDe(datos?.factura);
+  const bl = textoDe(datos?.billOfLading);
+  const pedimento = textoDe(datos?.pedimento);
+  const sellos = textoDe(datos?.sellosFiscales);
+  const otros = Array.isArray(datos?.otros)
+    ? datos.otros.flatMap((o) => {
+        if (!o || typeof o !== "object") return [];
+        const titulo = textoDe((o as { titulo?: unknown }).titulo);
+        const numero = textoDe((o as { numero?: unknown }).numero);
+        if (!titulo && !numero) return [];
+        return [{ titulo: titulo || "Otro", numero: numero || "—" }];
+      })
+    : [];
+
+  const hayDatos = Boolean(factura || bl || pedimento || sellos || otros.length || fotos.length);
+  if (!hayDatos) return null;
+
+  return (
+    <section>
+      <h2>Documentos</h2>
+      <dl className="reporte__datos">
+        <div>
+          <dt>Factura</dt>
+          <dd>{factura || "—"}</dd>
+        </div>
+        <div>
+          <dt>Bill of Lading</dt>
+          <dd>{bl || "—"}</dd>
+        </div>
+        <div>
+          <dt>Pedimento</dt>
+          <dd>{pedimento || "—"}</dd>
+        </div>
+        <div>
+          <dt>Sellos fiscales</dt>
+          <dd>{sellos || "—"}</dd>
+        </div>
+        {otros.map((o, i) => (
+          <div key={`${o.titulo}-${i}`}>
+            <dt>{o.titulo}</dt>
+            <dd>{o.numero}</dd>
+          </div>
+        ))}
+      </dl>
+      {fotos.length > 0 && (
+        <div className="reporte__fotos">
+          {fotos.map((foto) => {
+            const url = foto.storage_path ? urlPorRuta.get(foto.storage_path) : null;
+            if (!url) return null;
+            return (
+              <div className="reporte__foto" key={foto.id}>
+                <figure>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt={foto.point_label ?? "Documento"}
+                    loading="eager"
+                  />
+                  <figcaption>
+                    <strong>{foto.point_label ?? foto.point_key ?? "Documento"}</strong>
+                    <br />
+                    {format(new Date(foto.captured_at), "dd/MM/yyyy HH:mm:ss")}
+                    {foto.latitude != null && foto.longitude != null && (
+                      <>
+                        <br />
+                        {foto.latitude.toFixed(5)}, {foto.longitude.toFixed(5)}
+                      </>
+                    )}
+                  </figcaption>
+                </figure>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function textoDe(valor: unknown): string {
+  return typeof valor === "string" ? valor.trim() : "";
 }
 
 function contarPuntos(

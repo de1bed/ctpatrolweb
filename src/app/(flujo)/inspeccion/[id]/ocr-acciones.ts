@@ -11,13 +11,10 @@ import { consumirCredito, reembolsarCredito } from "@/lib/ia/creditos";
 /**
  * Escaneo de un documento con la cámara.
  *
- * A diferencia de la evidencia de inspección, la foto del documento NO se
- * guarda: solo se usa para extraer los cuatro números y se descarta. Una
- * factura lleva precios, condiciones comerciales y datos del cliente final
- * que no tienen por qué quedarse en el expediente de una inspección de
- * seguridad — y lo que no se guarda no se puede filtrar.
- *
- * Por eso la imagen viaja en el cuerpo de la petición y no por Storage.
+ * Esta petición solo extrae los números. La foto en sí la archiva el
+ * teléfono como evidencia (fase documentos), con fecha y ubicación.
+ * La imagen del escaneo viaja en el cuerpo para leerla; no se queda en
+ * esta ruta.
  */
 
 const esquema = z.object({
