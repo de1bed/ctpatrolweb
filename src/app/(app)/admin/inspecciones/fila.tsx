@@ -50,13 +50,19 @@ export function FilaInspeccion({
   const [pendiente, empezar] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [cancelando, setCancelando] = useState(false);
-  const [eliminando, setEliminando] = useState(false);
+  const [pasoEliminar, setPasoEliminar] = useState<0 | 1 | 2>(0);
   const [motivo, setMotivo] = useState("");
 
   const cerrada =
     inspeccion.status === "completed" || inspeccion.status === "cancelled";
 
+  const avisoEliminar =
+    pasoEliminar === 1
+      ? "¿Seguro que deseas eliminar esta inspección?"
+      : "La guardaremos durante 30 días. Después de ese tiempo será imposible recuperarla. ¿Seguro que deseas eliminar?";
+
   return (
+    <>
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-start gap-3 p-4">
         <div className="min-w-0 flex-1">
@@ -249,40 +255,10 @@ export function FilaInspeccion({
       )}
 
       <div className="border-t border-line px-4 py-3">
-        {eliminando ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm text-ink-secondary">
-              Deja de verse en tu empresa. CTPatrol la conserva 30 días.
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                className="flex-1"
-                onClick={() => setEliminando(false)}
-              >
-                No eliminar
-              </Button>
-              <Button
-                variant="danger"
-                className="flex-1"
-                loading={pendiente}
-                onClick={() =>
-                  empezar(async () => {
-                    const r = await eliminarInspeccion(inspeccion.id);
-                    if (!r.ok) setError(r.error);
-                  })
-                }
-              >
-                Eliminar
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Button variant="secondary" onClick={() => setEliminando(true)}>
-            <Trash2 className="size-4" aria-hidden />
-            Eliminar
-          </Button>
-        )}
+        <Button variant="secondary" onClick={() => setPasoEliminar(1)}>
+          <Trash2 className="size-4" aria-hidden />
+          Eliminar
+        </Button>
       </div>
 
       {inspeccion.status === "completed" &&
@@ -293,5 +269,63 @@ export function FilaInspeccion({
           </div>
         )}
     </Card>
+
+    {pasoEliminar > 0 && (
+      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+        <button
+          type="button"
+          aria-label="Cerrar"
+          className="absolute inset-0 bg-black/60"
+          onClick={() => {
+            if (!pendiente) setPasoEliminar(0);
+          }}
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`titulo-eliminar-${inspeccion.id}`}
+          className="relative w-full rounded-t-3xl bg-surface p-5 shadow-2xl sm:max-w-md sm:rounded-3xl"
+        >
+          <h2 id={`titulo-eliminar-${inspeccion.id}`} className="text-xl font-bold text-ink">
+            Eliminar inspección
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-secondary">{avisoEliminar}</p>
+          {error && pasoEliminar === 2 && (
+            <p role="alert" className="mt-3 text-sm text-danger-600">
+              {error}
+            </p>
+          )}
+          <div className="mt-5 flex gap-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              disabled={pendiente}
+              onClick={() => setPasoEliminar(0)}
+            >
+              No
+            </Button>
+            <Button
+              variant="danger"
+              className="flex-1"
+              loading={pendiente}
+              onClick={() => {
+                if (pasoEliminar === 1) {
+                  setPasoEliminar(2);
+                  return;
+                }
+                empezar(async () => {
+                  const r = await eliminarInspeccion(inspeccion.id);
+                  if (r.ok) setPasoEliminar(0);
+                  else setError(r.error);
+                });
+              }}
+            >
+              Sí
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
