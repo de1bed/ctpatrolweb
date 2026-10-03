@@ -100,8 +100,9 @@ export default async function SuperInspeccionesPage() {
       <AppHeader titulo="Plataforma" nombreUsuario={sesion.nombre} nombreCuenta="CTPatrol" />
       <main className="mx-auto max-w-3xl px-gutter pb-24 pt-5 lg:pb-10">
         <p className="mb-4 text-sm text-ink-secondary">
-          Cada empresa va plegada. Ábrela para créditos, IA, suspensión y sus inspecciones.
-          Las eliminadas siguen 30 días.
+          Vista de super admin: aquí ves todas las empresas, cada una por separado. Sus
+          usuarios, inspecciones y catálogos no se cruzan entre empresas. Ábrela para
+          créditos, IA, suspensión y sus inspecciones. Las eliminadas siguen 30 días.
         </p>
         <ListaSuper
           grupos={grupos}

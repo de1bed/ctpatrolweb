@@ -29,7 +29,7 @@ const FILTROS: { valor: string; etiqueta: string }[] = [
 export default async function AdminInspeccionesPage({
   searchParams,
 }: PageProps<"/admin/inspecciones">) {
-  await requerirAdmin();
+  const sesion = await requerirAdmin();
   const params = await searchParams;
 
   const estado = typeof params.estado === "string" ? params.estado : "abiertas";
@@ -42,6 +42,7 @@ export default async function AdminInspeccionesPage({
     .select(
       "id, display_id, status, customer_name, tractor_number, driver_name, updated_at, completed_at, scheduled_for, passed, findings_count, assigned_to, verification_token, verification_revoked_at, profiles!inspections_assigned_to_fkey(id, full_name)"
     )
+    .eq("company_account_id", sesion.companyAccountId)
     .order("updated_at", { ascending: false })
     .limit(100);
 
@@ -72,6 +73,7 @@ export default async function AdminInspeccionesPage({
   const { data: inspectores } = await supabase
     .from("profiles")
     .select("id, full_name")
+    .eq("company_account_id", sesion.companyAccountId)
     .eq("role", "inspector")
     .eq("is_active", true)
     .order("full_name");

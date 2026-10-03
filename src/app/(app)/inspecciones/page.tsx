@@ -59,6 +59,7 @@ export default async function InspeccionesPage({
           .select(
             "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for"
           )
+          .eq("company_account_id", sesion.companyAccountId)
           .not("scheduled_for", "is", null)
           .gte("scheduled_for", desde.toISOString())
           .lt("scheduled_for", hasta.toISOString())
@@ -70,6 +71,7 @@ export default async function InspeccionesPage({
           .select(
             "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for"
           )
+          .eq("company_account_id", sesion.companyAccountId)
           .in("status", ["draft", "assigned", "in_progress", "paused"])
           .order("updated_at", { ascending: false })
           .limit(100);

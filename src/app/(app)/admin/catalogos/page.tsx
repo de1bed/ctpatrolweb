@@ -29,7 +29,7 @@ const ETIQUETAS: Record<TipoCatalogo, { principal: string; secundario: string }>
 export default async function CatalogosPage({
   searchParams,
 }: PageProps<"/admin/catalogos">) {
-  await requerirAdmin();
+  const sesion = await requerirAdmin();
   const params = await searchParams;
 
   const tipo = (
@@ -45,6 +45,7 @@ export default async function CatalogosPage({
   let consulta = supabase
     .from(cfg.tabla)
     .select(`id, ${cfg.principal}, ${cfg.secundario}, is_active, is_ephemeral, created_at`)
+    .eq("company_account_id", sesion.companyAccountId)
     .order("is_ephemeral", { ascending: false })
     .order(cfg.principal)
     .limit(200);

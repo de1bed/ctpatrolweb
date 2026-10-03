@@ -41,7 +41,9 @@ export async function guardarCatalogo(entrada: unknown): Promise<Resultado> {
   };
 
   const { error } = id
-    ? await supabase.from(cfg.tabla).update(fila as never).eq("id", id)
+    ? await supabase.from(cfg.tabla).update(fila as never)
+        .eq("id", id)
+        .eq("company_account_id", sesion.companyAccountId)
     : await supabase
         .from(cfg.tabla)
         .insert({
@@ -74,7 +76,7 @@ export async function desactivarCatalogo(
   id: string,
   activo: boolean
 ): Promise<Resultado> {
-  await requerirAdmin();
+  const sesion = await requerirAdmin();
 
   const cfg = TABLAS[tipo];
   if (!cfg) return { ok: false, error: "Catálogo inválido." };
@@ -83,7 +85,8 @@ export async function desactivarCatalogo(
   const { error } = await supabase
     .from(cfg.tabla)
     .update({ is_active: activo } as never)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_account_id", sesion.companyAccountId);
 
   if (error) return { ok: false, error: "No se pudo actualizar." };
 
@@ -102,7 +105,7 @@ export async function persistirEfimero(
   tipo: TipoCatalogo,
   id: string
 ): Promise<Resultado> {
-  await requerirAdmin();
+  const sesion = await requerirAdmin();
 
   const cfg = TABLAS[tipo];
   const supabase = await createClient();
@@ -110,7 +113,8 @@ export async function persistirEfimero(
   const { error } = await supabase
     .from(cfg.tabla)
     .update({ is_ephemeral: false } as never)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_account_id", sesion.companyAccountId);
 
   if (error) {
     if (error.code === "23505") {

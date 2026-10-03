@@ -28,6 +28,7 @@ export default async function InspectoresPage() {
   const { data, error } = await supabase
     .from("profiles")
     .select("id, full_name, email, role, is_active, created_at, inspector_permissions!inspector_permissions_profile_id_fkey(*)")
+    .eq("company_account_id", sesion.companyAccountId)
     .order("is_active", { ascending: false })
     .order("full_name");
 

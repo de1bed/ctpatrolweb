@@ -12,14 +12,15 @@ export default async function InicioPage() {
   const permisos = await obtenerPermisos(sesion);
   const supabase = await createClient();
 
-  // RLS ya limita esto a lo que el usuario puede ver, así que no hace falta
-  // filtrar por inspector aquí: un inspector solo recibe las suyas, un admin
-  // recibe las de su cuenta.
+  // RLS limita esto a lo que el usuario puede ver: un inspector solo recibe
+  // las suyas, un admin las de su cuenta. El filtro de empresa es por el
+  // super admin, a quien RLS le deja ver todas las cuentas.
   const { data: activas } = await supabase
     .from("inspections")
     .select(
       "id, display_id, status, customer_name, tractor_number, transport_type, updated_at"
     )
+    .eq("company_account_id", sesion.companyAccountId)
     .in("status", ["assigned", "in_progress", "paused"])
     .order("updated_at", { ascending: false })
     .limit(20);

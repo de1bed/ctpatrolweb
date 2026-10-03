@@ -36,7 +36,7 @@ export default async function AdminCalendarioPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requerirAdmin();
+  const sesion = await requerirAdmin();
   const params = await searchParams;
 
   const mes = mesDesdeParam(valorParam(params, "mes") || undefined);
@@ -57,6 +57,7 @@ export default async function AdminCalendarioPage({
     .select(
       "id, display_id, status, customer_name, tractor_number, scheduled_for, assigned_to, profiles!inspections_assigned_to_fkey(id, full_name)"
     )
+    .eq("company_account_id", sesion.companyAccountId)
     .not("scheduled_for", "is", null)
     .gte("scheduled_for", desde.toISOString())
     .lt("scheduled_for", hasta.toISOString())
@@ -72,6 +73,7 @@ export default async function AdminCalendarioPage({
     supabase
       .from("profiles")
       .select("id, full_name")
+      .eq("company_account_id", sesion.companyAccountId)
       .eq("role", "inspector")
       .eq("is_active", true)
       .order("full_name"),

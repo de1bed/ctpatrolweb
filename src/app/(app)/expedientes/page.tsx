@@ -30,6 +30,7 @@ export default async function ExpedientesPage({
     .select(
       "id, display_id, status, customer_name, tractor_number, updated_at, completed_at, passed, findings_count"
     )
+    .eq("company_account_id", sesion.companyAccountId)
     .eq("status", "completed")
     .order("completed_at", { ascending: false })
     .limit(100);

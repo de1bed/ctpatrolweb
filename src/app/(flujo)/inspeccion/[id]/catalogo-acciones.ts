@@ -32,17 +32,18 @@ export async function buscarCatalogo(
   tipo: TipoCatalogo,
   termino: string
 ): Promise<ItemCatalogo[]> {
-  await requerirSesion();
+  const sesion = await requerirSesion();
   const supabase = await createClient();
 
   const cfg = TABLAS[tipo];
   if (!cfg) return [];
 
-  // RLS ya limita a la cuenta del usuario, así que no hace falta filtrar por
-  // company_account_id aquí.
+  // RLS limita a la cuenta del usuario, salvo al super admin, que ve todas:
+  // por eso se filtra explícitamente por su empresa.
   let consulta = supabase
     .from(cfg.tabla)
     .select(`id, ${cfg.campo}, ${cfg.extra}`)
+    .eq("company_account_id", sesion.companyAccountId)
     .eq("is_active", true)
     // Los efímeros no se ofrecen: nacieron para una inspección concreta y
     // reaparecer en el buscador de otra es justo lo que ensucia el catálogo.

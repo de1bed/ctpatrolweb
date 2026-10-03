@@ -22,7 +22,8 @@ import { createClient } from "@/lib/supabase/server";
 export const metadata: Metadata = { title: "Administración" };
 
 export default async function AdminResumenPage() {
-  await requerirAdmin();
+  const sesion = await requerirAdmin();
+  const empresa = sesion.companyAccountId;
   const supabase = await createClient();
 
   const hace7 = subDays(new Date(), 7).toISOString();
@@ -35,6 +36,7 @@ export default async function AdminResumenPage() {
     supabase
       .from("inspections")
       .select("id", { count: "exact", head: true })
+      .eq("company_account_id", empresa)
       .eq("status", estado)
       .then((r) => r.count ?? 0);
 
@@ -57,12 +59,14 @@ export default async function AdminResumenPage() {
     supabase
       .from("inspections")
       .select("id", { count: "exact", head: true })
+      .eq("company_account_id", empresa)
       .eq("status", "completed")
       .gte("completed_at", hace7)
       .then((r) => r.count ?? 0),
     supabase
       .from("inspections")
       .select("id", { count: "exact", head: true })
+      .eq("company_account_id", empresa)
       .eq("status", "completed")
       .eq("passed", false)
       .gte("completed_at", hace30)
@@ -70,12 +74,14 @@ export default async function AdminResumenPage() {
     supabase
       .from("inspections")
       .select("id", { count: "exact", head: true })
+      .eq("company_account_id", empresa)
       .eq("status", "completed")
       .gte("completed_at", hace30)
       .then((r) => r.count ?? 0),
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
+      .eq("company_account_id", empresa)
       .eq("role", "inspector")
       .eq("is_active", true)
       .then((r) => r.count ?? 0),
@@ -84,12 +90,14 @@ export default async function AdminResumenPage() {
       .select(
         "id, display_id, status, customer_name, tractor_number, updated_at, completed_at, passed, findings_count"
       )
+      .eq("company_account_id", empresa)
       .order("updated_at", { ascending: false })
       .limit(6)
       .then((r) => r.data ?? []),
     supabase
       .from("inspections")
       .select("assigned_to, duration_seconds, passed, completed_at")
+      .eq("company_account_id", empresa)
       .eq("status", "completed")
       .gte("completed_at", hace30)
       .limit(1000)
@@ -100,7 +108,7 @@ export default async function AdminResumenPage() {
     ...new Set(cierresMes.map((c) => c.assigned_to).filter((id): id is string => Boolean(id))),
   ];
   const { data: perfiles } = idsInspectores.length
-    ? await supabase.from("profiles").select("id, full_name").in("id", idsInspectores)
+    ? await supabase.from("profiles").select("id, full_name").eq("company_account_id", empresa).in("id", idsInspectores)
     : { data: [] };
   const nombres = new Map((perfiles ?? []).map((p) => [p.id, p.full_name]));
 
