@@ -8,10 +8,12 @@ import { ProgressBar } from "@/components/inspection/progress-bar";
 import { StatusBadge } from "@/components/inspection/status-badge";
 import { PastillaCreditos } from "@/components/shell/creditos";
 import { Bitacora } from "@/components/inspection/bitacora";
+import { PresenciaColectiva } from "@/components/inspection/colectiva";
 import { Card } from "@/components/ui/card";
 import { requerirSesion } from "@/lib/auth";
 import { construirFlujo } from "@/lib/inspection/flujo";
 import { leerProgreso } from "@/lib/inspection/progreso";
+import { esColectiva } from "@/lib/inspecciones/colectiva";
 import { capacidadesDe } from "@/lib/inspection/transporte";
 import { createClient } from "@/lib/supabase/server";
 
@@ -47,6 +49,10 @@ export default async function InspeccionPage({
   const cerrada =
     inspeccion.status === "completed" || inspeccion.status === "cancelled";
 
+  // Colectiva abierta: se muestra quién está en qué fase y el aviso de firmas.
+  const colectiva = !cerrada && (await esColectiva(supabase, id));
+  const titulos = Object.fromEntries(flujo.pasos.map((p) => [p.clave, p.titulo]));
+
   return (
     <>
       {/* Encabezado propio, con botón de regreso: dentro de una inspección el
@@ -72,6 +78,8 @@ export default async function InspeccionPage({
           <StatusBadge estado={inspeccion.status} />
         </div>
       </header>
+
+      {colectiva && <PresenciaColectiva inspeccionId={id} titulos={titulos} />}
 
       <main className="mx-auto max-w-5xl px-gutter pb-28 pt-4 lg:pb-10">
         {/* ── Resumen ──────────────────────────────────────────────────── */}

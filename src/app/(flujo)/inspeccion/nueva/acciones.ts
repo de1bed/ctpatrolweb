@@ -15,7 +15,10 @@ export type ResultadoCreacion = { error: string } | never;
  * inspectores capturando al mismo tiempo se lleven el mismo número, que es
  * justo lo que pasaba en el sistema anterior.
  */
-export async function crearInspeccion(): Promise<ResultadoCreacion> {
+export async function crearInspeccion(colectivaCruda?: unknown): Promise<ResultadoCreacion> {
+  // Colectiva: cualquier persona activa de la empresa puede sumarse. Se
+  // decide aquí y ya no cambia (lo impide un trigger en la base).
+  const colectiva = colectivaCruda === true;
   const sesion = await requerirSesion();
   const permisos = await obtenerPermisos(sesion);
 
@@ -35,6 +38,9 @@ export async function crearInspeccion(): Promise<ResultadoCreacion> {
       assigned_to: sesion.userId,
       created_by: sesion.userId,
       started_at: new Date().toISOString(),
+      // Solo se manda cuando es colectiva: si la migración 0019 todavía no
+      // estuviera aplicada, la inspección normal se crea igual que siempre.
+      ...(colectiva ? { is_collective: true } : {}),
     } as never)
     .select("id")
     .single();
@@ -48,6 +54,7 @@ export async function crearInspeccion(): Promise<ResultadoCreacion> {
     inspection_id: data.id,
     actor_id: sesion.userId,
     event: "started",
+    payload: colectiva ? { colectiva: true } : {},
   });
 
   // Directo a la primera fase: el índice no aporta nada cuando está vacío.

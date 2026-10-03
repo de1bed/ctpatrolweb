@@ -10,6 +10,7 @@ import {
 } from "@/components/inspection/catalog-picker";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
+import { Toggle } from "@/components/ui/option-cards";
 import { CAPACIDADES, TIPOS_TRANSPORTE, type TipoTransporte } from "@/lib/inspection/transporte";
 
 function uuidONulo(valor: string | null | undefined): string | null {
@@ -48,10 +49,12 @@ export function FormularioProgramar({
   const [tractor, setTractor] = useState<SeleccionCatalogo | null>(null);
   const [conductor, setConductor] = useState<SeleccionCatalogo | null>(null);
   const [tipo, setTipo] = useState<TipoTransporte | "">("");
+  const [colectiva, setColectiva] = useState(false);
 
   useEffect(() => {
     if (!abierto) return;
     setError(null);
+    setColectiva(false);
     setInspectorId(inspectorInicial ?? "");
     setProgramada(fechaInicial ?? "");
     setCliente(null);
@@ -106,9 +109,20 @@ export function FormularioProgramar({
             </p>
           )}
 
+          <Toggle
+            etiqueta="Abierta para toda la empresa"
+            descripcion="Inspección colectiva: cualquiera del equipo la ve y se puede sumar. Queda registrado quién hizo cada parte. No se puede cambiar después."
+            activo={colectiva}
+            onChange={setColectiva}
+          />
+
           <Field
-            label="Asignar a"
-            hint="Si la dejas sin asignar, no aparece en el calendario del inspector."
+            label={colectiva ? "Responsable (opcional)" : "Asignar a"}
+            hint={
+              colectiva
+                ? "Le aparece a todo el equipo aunque no tenga responsable."
+                : "Si la dejas sin asignar, no aparece en el calendario del inspector."
+            }
           >
             {(p) => (
               <Select
@@ -212,6 +226,7 @@ export function FormularioProgramar({
                   programadaPara: programada
                     ? new Date(programada).toISOString()
                     : null,
+                  colectiva,
                 });
                 if (r.ok) onCerrar();
                 else setError(r.error);

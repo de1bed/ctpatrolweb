@@ -252,6 +252,20 @@ export const esquemaFirmas = z.object({
     )
     .max(MAX_FIRMAS_ADICIONALES)
     .default([]),
+  /**
+   * Inspección colectiva: firma de cada participante además de quien cierra.
+   * El servidor comprueba contra la bitácora que no falte ninguno.
+   */
+  participantes: z
+    .array(
+      z.object({
+        perfilId: z.string().uuid(),
+        nombre: z.string().trim().min(1, "Falta el nombre de un participante").max(200),
+        firma: z.string().min(1, "Falta la firma de un participante"),
+      })
+    )
+    .max(30)
+    .default([]),
 });
 
 /** Fases sin datos propios: solo se marcan como vistas. */

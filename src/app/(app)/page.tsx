@@ -18,7 +18,7 @@ export default async function InicioPage() {
   const { data: activas } = await supabase
     .from("inspections")
     .select(
-      "id, display_id, status, customer_name, tractor_number, transport_type, updated_at"
+      "id, display_id, status, customer_name, tractor_number, transport_type, updated_at, is_collective"
     )
     .eq("company_account_id", sesion.companyAccountId)
     .in("status", ["assigned", "in_progress", "paused"])

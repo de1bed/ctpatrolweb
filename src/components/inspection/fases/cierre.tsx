@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, PauseCircle, Plus, ShieldCheck, Trash2, Video } from "lucide-react";
+import { Check, PauseCircle, Plus, ShieldCheck, Trash2, Users, Video } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { PantallaFase } from "@/components/inspection/phase-shell";
@@ -313,6 +313,14 @@ export function FaseFirmas(
      * distinto y el reporte quedaba con dos nombres para la misma persona.
      */
     conductores?: string[];
+    /**
+     * Inspección colectiva: quienes participaron (sin contar a quien cierra)
+     * y, si no soy yo, quién hizo más fases.
+     */
+    colectiva?: {
+      participantes: { perfilId: string; nombre: string }[];
+      cierra: string | null;
+    };
   }
 ) {
   const conductores = props.conductores ?? [];
@@ -325,6 +333,7 @@ export function FaseFirmas(
     inspector?: { nombre?: string; firma?: string };
     conductor?: { nombre?: string; firma?: string };
     adicionales?: { cargo?: string; nombre?: string; firma?: string }[];
+    participantes?: { perfilId?: string; nombre?: string; firma?: string }[];
   };
 
   const [nombreInspector, setNombreInspector] = useState(
@@ -355,11 +364,31 @@ export function FaseFirmas(
     setAdicionales((prev) => prev.map((f) => (f.clave === clave ? { ...f, ...cambios } : f)));
   }
 
+  // Colectiva: una firma por participante, con su nombre ya puesto. Si una
+  // ya se había capturado, se conserva.
+  const [firmasEquipo, setFirmasEquipo] = useState<FirmaEquipo[]>(() =>
+    (props.colectiva?.participantes ?? []).map((p) => {
+      const previa = guardadas.participantes?.find((f) => f.perfilId === p.perfilId);
+      return {
+        perfilId: p.perfilId,
+        nombre: previa?.nombre ?? p.nombre,
+        firma: previa?.firma ?? null,
+      };
+    })
+  );
+
+  function actualizarEquipo(perfilId: string, cambios: Partial<FirmaEquipo>) {
+    setFirmasEquipo((prev) =>
+      prev.map((f) => (f.perfilId === perfilId ? { ...f, ...cambios } : f))
+    );
+  }
+
   void previas;
 
   const adicionalIncompleta = adicionales.findIndex(
     (f) => !f.cargo.trim() || !f.nombre.trim() || !f.firma
   );
+  const equipoIncompleto = firmasEquipo.find((f) => !f.nombre.trim() || !f.firma);
 
   const falta =
     !nombreInspector.trim()
@@ -370,7 +399,9 @@ export function FaseFirmas(
           ? "Falta el nombre del conductor"
           : !firmaConductor
             ? "Falta la firma del conductor"
-            : adicionalIncompleta >= 0
+            : equipoIncompleto
+              ? `Falta la firma de ${equipoIncompleto.nombre.trim() || "un participante"}`
+              : adicionalIncompleta >= 0
               ? `Completa la firma adicional ${adicionalIncompleta + 1} o quítala`
               : null;
 
@@ -378,7 +409,7 @@ export function FaseFirmas(
     <PantallaFase
       {...props}
       descripcion={
-        adicionales.length > 0
+        adicionales.length > 0 || firmasEquipo.length > 0
           ? "Todas las firmas cierran la inspección."
           : "Ambas firmas cierran la inspección."
       }
@@ -392,6 +423,11 @@ export function FaseFirmas(
           nombre: f.nombre.trim(),
           firma: f.firma,
         })),
+        participantes: firmasEquipo.map((f) => ({
+          perfilId: f.perfilId,
+          nombre: f.nombre.trim(),
+          firma: f.firma,
+        })),
       })}
     >
       <Card className="mb-5 flex items-start gap-3 border-warn-500/40 bg-warn-50 p-4 dark:bg-warn-500/10">
@@ -401,6 +437,29 @@ export function FaseFirmas(
           solo un administrador puede reabrirlo. Revisa antes de firmar.
         </p>
       </Card>
+
+      {props.colectiva && (
+        <Card className="mb-5 flex items-start gap-3 border-brand-200 bg-brand-50 p-4 dark:border-brand-800 dark:bg-brand-950">
+          <Users className="mt-0.5 size-5 shrink-0 text-brand-600" aria-hidden />
+          <div className="flex flex-col gap-1.5 text-sm text-ink-secondary">
+            <p className="font-semibold text-ink">Inspección colectiva</p>
+            {firmasEquipo.length > 0 ? (
+              <p>
+                Firman aquí, en este teléfono, todos los que participaron. A los demás
+                les aparece un aviso para que vengan a firmar.
+              </p>
+            ) : (
+              <p>Nadie más participó en esta inspección.</p>
+            )}
+            {props.colectiva.cierra && (
+              <p className="font-medium text-warn-700 dark:text-warn-500">
+                Se recomienda cerrar en el teléfono de {props.colectiva.cierra}, que hizo
+                más fases. Si cierras aquí, todos deben firmar en este teléfono.
+              </p>
+            )}
+          </div>
+        </Card>
+      )}
 
       <div className="flex flex-col gap-7">
         <div className="flex flex-col gap-3">
@@ -419,6 +478,32 @@ export function FaseFirmas(
             onChange={setFirmaInspector}
           />
         </div>
+
+        {firmasEquipo.map((f, i) => (
+          <div
+            key={f.perfilId}
+            className="flex flex-col gap-3 rounded-2xl border border-brand-200 p-4 dark:border-brand-800"
+          >
+            <p className="text-sm font-medium text-ink-secondary">
+              Inspector participante {i + 1}
+            </p>
+            <Field label="Nombre" required>
+              {(p) => (
+                <Input
+                  {...p}
+                  value={f.nombre}
+                  onChange={(e) => actualizarEquipo(f.perfilId, { nombre: e.target.value })}
+                  maxLength={200}
+                />
+              )}
+            </Field>
+            <SignaturePad
+              etiqueta={`Firma de ${f.nombre.trim() || "participante"}`}
+              valor={f.firma}
+              onChange={(firma) => actualizarEquipo(f.perfilId, { firma })}
+            />
+          </div>
+        ))}
 
         <div className="flex flex-col gap-3">
           {conductores.length > 1 && (
@@ -538,6 +623,12 @@ export function FaseFirmas(
     </PantallaFase>
   );
 }
+
+type FirmaEquipo = {
+  perfilId: string;
+  nombre: string;
+  firma: string | null;
+};
 
 type FirmaAdicional = {
   clave: string;

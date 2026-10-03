@@ -57,7 +57,7 @@ export default async function InspeccionesPage({
       ? await supabase
           .from("inspections")
           .select(
-            "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for"
+            "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for, is_collective"
           )
           .eq("company_account_id", sesion.companyAccountId)
           .not("scheduled_for", "is", null)
@@ -69,7 +69,7 @@ export default async function InspeccionesPage({
       : await supabase
           .from("inspections")
           .select(
-            "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for"
+            "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for, is_collective"
           )
           .eq("company_account_id", sesion.companyAccountId)
           .in("status", ["draft", "assigned", "in_progress", "paused"])

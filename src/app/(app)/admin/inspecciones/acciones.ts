@@ -126,6 +126,8 @@ const esquemaNueva = z.object({
     .refine((s) => !Number.isNaN(Date.parse(s)))
     .nullable()
     .optional(),
+  /** Abierta a toda la empresa. Solo se elige al crear. */
+  colectiva: z.boolean().optional(),
 });
 
 /**
@@ -151,6 +153,7 @@ export async function crearAsignada(entrada: unknown): Promise<Resultado> {
     conductorLicencia,
     tipoTransporte,
     programadaPara,
+    colectiva = false,
   } = validado.data;
 
   // El inspector lee las fases desde `data`, no desde las columnas. Si solo
@@ -173,7 +176,10 @@ export async function crearAsignada(entrada: unknown): Promise<Resultado> {
     .from("inspections")
     .insert({
       company_account_id: sesion.companyAccountId,
-      status: inspectorId ? ("assigned" as const) : ("draft" as const),
+      // Una colectiva sin inspector ya está lista para trabajarse: le aparece
+      // a toda la empresa. Un borrador no se le mostraría a nadie.
+      status: inspectorId || colectiva ? ("assigned" as const) : ("draft" as const),
+      ...(colectiva ? { is_collective: true } : {}),
       assigned_to: inspectorId,
       assigned_by: inspectorId ? sesion.userId : null,
       assigned_at: inspectorId ? new Date().toISOString() : null,
@@ -200,7 +206,11 @@ export async function crearAsignada(entrada: unknown): Promise<Resultado> {
     inspection_id: data.id,
     actor_id: sesion.userId,
     event: "created_by_admin",
-    payload: { asignadaA: inspectorId, cuando: programadaPara } as Json,
+    payload: {
+      asignadaA: inspectorId,
+      cuando: programadaPara,
+      ...(colectiva ? { colectiva: true } : {}),
+    } as Json,
   });
 
   refrescarListas();

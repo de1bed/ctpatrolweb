@@ -28,12 +28,15 @@ import {
 import { FaseTipoTransporte } from "@/components/inspection/fases/tipo-transporte";
 import { FaseVisual } from "@/components/inspection/fases/visual";
 import type { FotoServidor } from "@/components/inspection/captura-identificacion";
+import { GuardiaColectiva } from "@/components/inspection/colectiva";
 import { obtenerPermisos, requerirSesion } from "@/lib/auth";
 import { ultimaPorPunto } from "@/lib/inspection/identificacion";
 import type { FaseId } from "@/lib/inspection/fases";
 import { construirFlujo, puedeAbrir } from "@/lib/inspection/flujo";
 import { leerProgreso } from "@/lib/inspection/progreso";
 import type { GrupoPuntos } from "@/lib/inspection/puntos";
+import { otrosParticipantes, quienCierra } from "@/lib/inspection/colectiva";
+import { esColectiva, leerParticipantes } from "@/lib/inspecciones/colectiva";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,7 +52,26 @@ export const dynamic = "force-dynamic";
  * El chequeo de acceso se hace ANTES de renderizar. Confiar en que el índice
  * solo muestra enlaces válidos no basta: la URL se puede teclear a mano.
  */
-export default async function PasoPage({
+export default async function PasoPage(props: PageProps<"/inspeccion/[id]/[paso]">) {
+  const { id, paso: clavePaso } = await props.params;
+  const supabase = await createClient();
+  const [contenido, colectiva] = await Promise.all([
+    contenidoDeFase(props),
+    esColectiva(supabase, id),
+  ]);
+
+  if (!colectiva) return contenido;
+
+  // Colectiva: la fase la ocupa una sola persona a la vez. La key reinicia
+  // la guardia al cambiar de fase.
+  return (
+    <GuardiaColectiva key={clavePaso} inspeccionId={id} clavePaso={clavePaso}>
+      {contenido}
+    </GuardiaColectiva>
+  );
+}
+
+async function contenidoDeFase({
   params,
 }: PageProps<"/inspeccion/[id]/[paso]">) {
   const { id, paso: clavePaso } = await params;
@@ -152,10 +174,35 @@ export default async function PasoPage({
         />
       );
 
-    case "firmas":
+    case "firmas": {
+      // Colectiva: firma cada participante, en el teléfono de quien hizo
+      // más fases. Si no se puede leer quién participó, firmas de siempre.
+      const personas = (await esColectiva(supabase, id))
+        ? await leerParticipantes(supabase, id)
+        : null;
+      const cierra = personas ? quienCierra(personas) : null;
+
       // El conductor ya se capturó en su fase: la firma lo toma de ahí en
       // vez de volver a pedir el nombre.
-      return <FaseFirmas {...base} conductores={conductoresCapturados(datos)} />;
+      return (
+        <FaseFirmas
+          {...base}
+          conductores={conductoresCapturados(datos)}
+          colectiva={
+            personas
+              ? {
+                  participantes: otrosParticipantes(personas, sesion.userId).map((p) => ({
+                    perfilId: p.perfilId,
+                    nombre: p.nombre,
+                  })),
+                  cierra:
+                    cierra && cierra.perfilId !== sesion.userId ? cierra.nombre : null,
+                }
+              : undefined
+          }
+        />
+      );
+    }
 
     // ── Fases con permisos de catálogo ────────────────────────────────────
     case "cliente":

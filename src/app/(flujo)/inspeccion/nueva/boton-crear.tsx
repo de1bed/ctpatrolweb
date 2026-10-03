@@ -4,15 +4,46 @@ import { AlertCircle, Play } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import { OptionCards, type Opcion } from "@/components/ui/option-cards";
 
 import { crearInspeccion } from "./acciones";
+
+type Modo = "individual" | "colectiva";
+
+const MODOS: Opcion<Modo>[] = [
+  {
+    valor: "individual",
+    etiqueta: "Individual",
+    descripcion: "Solo tú la capturas.",
+  },
+  {
+    valor: "colectiva",
+    etiqueta: "Colectiva",
+    descripcion:
+      "Le aparece a toda tu empresa y otros se pueden sumar. Por ejemplo, uno hace la revisión externa y otro la interna.",
+  },
+];
 
 export function BotonCrear() {
   const [pendiente, empezar] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Sin valor inicial a propósito: se pregunta siempre, para que nadie abra
+  // una colectiva (o una individual) sin darse cuenta.
+  const [modo, setModo] = useState<Modo | null>(null);
 
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <OptionCards
+          nombre="modo"
+          leyenda="¿Quién va a capturar esta inspección?"
+          opciones={MODOS}
+          valor={modo}
+          onChange={setModo}
+        />
+        <p className="mt-2 text-xs text-ink-muted">No se puede cambiar después de comenzar.</p>
+      </div>
+
       {error && (
         <div
           role="alert"
@@ -27,18 +58,19 @@ export function BotonCrear() {
         size="lg"
         block
         loading={pendiente}
+        disabled={!modo}
         onClick={() =>
           empezar(async () => {
             setError(null);
             // Cuando todo sale bien, la acción redirige y este código ya no
             // continúa. Solo se llega a leer el resultado si algo falló.
-            const resultado = await crearInspeccion();
+            const resultado = await crearInspeccion(modo === "colectiva");
             if (resultado && "error" in resultado) setError(resultado.error);
           })
         }
       >
         {!pendiente && <Play className="size-5" aria-hidden />}
-        {pendiente ? "Creando…" : "Comenzar inspección"}
+        {pendiente ? "Creando…" : modo ? "Comenzar inspección" : "Elige una opción"}
       </Button>
     </div>
   );

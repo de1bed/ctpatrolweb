@@ -926,6 +926,17 @@ export type Database = {
         Args: { p_id: string }
         Returns: undefined
       }
+      participantes_inspeccion: {
+        Args: { p_id: string }
+        Returns: {
+          perfil_id: string
+          nombre: string
+          fases: number
+          fotos: number
+          paso_actual: string | null
+          latido: string | null
+        }[]
+      }
       soltar_fase_inspeccion: {
         Args: { p_id: string; p_paso?: string | null }
         Returns: undefined

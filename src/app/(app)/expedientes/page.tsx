@@ -28,7 +28,7 @@ export default async function ExpedientesPage({
   let consulta = supabase
     .from("inspections")
     .select(
-      "id, display_id, status, customer_name, tractor_number, updated_at, completed_at, passed, findings_count"
+      "id, display_id, status, customer_name, tractor_number, updated_at, completed_at, passed, findings_count, is_collective"
     )
     .eq("company_account_id", sesion.companyAccountId)
     .eq("status", "completed")

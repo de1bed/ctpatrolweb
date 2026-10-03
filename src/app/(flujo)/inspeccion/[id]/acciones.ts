@@ -4,6 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requerirSesion } from "@/lib/auth";
+import {
+  firmasPendientes,
+  ocupadosPorOtros,
+  type FirmaParticipante,
+  type Persona,
+} from "@/lib/inspection/colectiva";
+import { esColectiva, leerParticipantes } from "@/lib/inspecciones/colectiva";
 import { enviarReporteAlCerrar } from "@/lib/email/reporte-cierre";
 import { ESQUEMAS, PROYECCIONES } from "@/lib/inspection/esquemas";
 import { FASES_POR_ID } from "@/lib/inspection/fases";
@@ -12,6 +19,13 @@ import { leerProgreso, marcarCompletado } from "@/lib/inspection/progreso";
 import { calcularResultado } from "@/lib/inspection/resultado";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
+
+/** "Ana", "Ana y Beto", "Ana, Beto y Caro". */
+function unirNombres(personas: Persona[]): string {
+  const nombres = personas.map((p) => p.nombre);
+  if (nombres.length <= 1) return nombres.join("");
+  return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}
 
 export type ResultadoGuardado =
   | { ok: true; siguiente: string | null }
@@ -107,6 +121,46 @@ export async function guardarFase(
   }
 
   const datos = validado.data as Record<string, unknown>;
+
+  // ── Colectiva: nadie captura encima de otro ───────────────────────────────
+  // El teléfono ya bloquea la pantalla, pero el servidor es lo que cuenta.
+  // Si no se puede leer quién participa, se guarda como inspección normal.
+  if (await esColectiva(supabase, inspeccionId)) {
+    const personas = await leerParticipantes(supabase, inspeccionId);
+    if (personas) {
+      const ocupante = personas.find(
+        (p) => p.pasoActual === clavePaso && p.perfilId !== sesion.userId
+      );
+      if (ocupante) {
+        return {
+          ok: false,
+          error: `${ocupante.nombre} está capturando esta fase. Tu cambio no se guardó.`,
+        };
+      }
+
+      if (faseId === "firmas") {
+        const capturando = ocupadosPorOtros(personas, sesion.userId);
+        if (capturando.length > 0) {
+          return {
+            ok: false,
+            error: `Todavía no se puede cerrar: ${unirNombres(capturando)} sigue capturando. Espera a que termine.`,
+          };
+        }
+
+        const pendientes = firmasPendientes(
+          personas,
+          sesion.userId,
+          (datos.participantes as FirmaParticipante[] | undefined) ?? []
+        );
+        if (pendientes.length > 0) {
+          return {
+            ok: false,
+            error: `Falta la firma de ${unirNombres(pendientes)}. Todos los que participaron firman aquí; si no ves su espacio para firmar, vuelve a abrir esta pantalla.`,
+          };
+        }
+      }
+    }
+  }
 
   // ── Escritura ─────────────────────────────────────────────────────────────
   // Tope de 2 horas por visita: si el inspector dejó la pestaña abierta toda

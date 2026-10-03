@@ -152,6 +152,7 @@ export default async function ReportePage({
         inspector?: { nombre?: string; firma?: string };
         conductor?: { nombre?: string; firma?: string };
         adicionales?: { cargo?: string; nombre?: string; firma?: string }[];
+        participantes?: { nombre?: string; firma?: string }[];
       }
     | undefined;
 
@@ -443,6 +444,19 @@ export default async function ReportePage({
                   Inspector
                 </p>
               </div>
+              {(firmas.participantes ?? [])
+                .filter((f) => f.firma)
+                .map((f, i) => (
+                  <div key={`participante-${i}`} className="reporte__firma">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={f.firma} alt={`Firma de ${f.nombre ?? "inspector"}`} />
+                    <p>
+                      <strong>{f.nombre}</strong>
+                      <br />
+                      Inspector
+                    </p>
+                  </div>
+                ))}
               {firmas.conductor?.firma && (
                 <div className="reporte__firma">
                   {/* eslint-disable-next-line @next/next/no-img-element */}

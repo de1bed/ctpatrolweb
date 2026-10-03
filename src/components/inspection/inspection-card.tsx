@@ -1,4 +1,4 @@
-import { ChevronRight, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ChevronRight, ShieldAlert, ShieldCheck, Users } from "lucide-react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
@@ -18,6 +18,8 @@ export type InspeccionResumen = {
   completed_at?: string | null;
   passed?: boolean | null;
   findings_count?: number;
+  /** Abierta a toda la empresa: cualquiera del equipo puede sumarse. */
+  is_collective?: boolean;
 };
 
 /**
@@ -43,6 +45,13 @@ export function InspectionCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge estado={inspeccion.status} />
+
+            {inspeccion.is_collective && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/40 bg-brand-50 px-2.5 py-1 text-xs font-semibold leading-none text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                <Users className="size-3.5 shrink-0" aria-hidden />
+                Colectiva
+              </span>
+            )}
 
             {mostrarResultado && cerrada && inspeccion.passed !== null && (
               <span
