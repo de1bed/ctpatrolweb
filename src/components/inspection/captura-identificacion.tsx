@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { leerIdentificacion } from "@/app/(flujo)/inspeccion/[id]/identificacion-acciones";
 import { CamaraPantallaCompleta } from "@/components/inspection/camera";
@@ -47,6 +47,7 @@ export function CapturaIdentificacion({
   tipoLectura,
   iaHabilitada,
   onLectura,
+  onTieneFoto,
 }: {
   inspeccionId: string;
   clavePaso: string;
@@ -61,6 +62,12 @@ export function CapturaIdentificacion({
   tipoLectura: TipoIdentificacion;
   iaHabilitada: boolean;
   onLectura: (datos: LecturaIdentificacion) => void;
+  /**
+   * Avisa si el punto ya tiene foto, en el teléfono o en el servidor. La
+   * fase lo usa para no dejar continuar sin ella. Cuenta la foto aún sin
+   * subir: sin señal, la evidencia vive en el teléfono hasta que haya red.
+   */
+  onTieneFoto?: (tiene: boolean) => void;
 }) {
   const [fotoLocal, setFotoLocal] = useState<FotoLocal | null>(null);
   const [camaraAbierta, setCamaraAbierta] = useState(false);
@@ -120,6 +127,17 @@ export function CapturaIdentificacion({
   }, [urlLocal]);
 
   const url = urlLocal ?? fotoServidor?.url ?? null;
+  const tieneFoto = Boolean(url);
+
+  // La fase pasa una función nueva en cada render; con la ref el efecto
+  // solo corre cuando cambia el dato, no cuando cambia la función.
+  const avisar = useRef(onTieneFoto);
+  useEffect(() => {
+    avisar.current = onTieneFoto;
+  });
+  useEffect(() => {
+    avisar.current?.(tieneFoto);
+  }, [tieneFoto]);
 
   async function alCapturar(foto: FotoCapturada, capturadaEn: string) {
     setError(null);

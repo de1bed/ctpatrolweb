@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   CapturaIdentificacion,
@@ -43,6 +43,28 @@ type PropsConFoto = PropsConPermisos & {
   /** Fotos ya subidas de este paso, la más reciente por punto. */
   fotosServidor?: Record<string, FotoServidor>;
 };
+
+/**
+ * Qué puntos de identificación ya tienen foto.
+ *
+ * La foto de licencia y de placas es obligatoria: sin ella la fase no deja
+ * continuar. Cada CapturaIdentificacion reporta su punto por onTieneFoto.
+ */
+function useFotosTomadas() {
+  const [conFoto, setConFoto] = useState<ReadonlySet<string>>(() => new Set());
+
+  const marcar = useCallback((clave: string, tiene: boolean) => {
+    setConFoto((prev) => {
+      if (prev.has(clave) === tiene) return prev;
+      const siguiente = new Set(prev);
+      if (tiene) siguiente.add(clave);
+      else siguiente.delete(clave);
+      return siguiente;
+    });
+  }, []);
+
+  return { tiene: (clave: string) => conFoto.has(clave), marcar };
+}
 
 function mismoNombre(a: string, b: string): boolean {
   const normal = (s: string) =>
@@ -156,11 +178,24 @@ export function FaseConductor(props: PropsConFoto) {
   const nombreNoCoincide =
     sel && nombreLeido && !mismoNombre(sel.nombre, nombreLeido) ? nombreLeido : null;
 
+  const fotos = useFotosTomadas();
+  // Solo cuentan los adicionales con nombre: los vacíos no se guardan.
+  const adicionalSinFoto = adicionales.findIndex(
+    (c) => c.nombre.trim() && !fotos.tiene(c.fotoClave)
+  );
+  const faltante = !sel
+    ? "Selecciona el conductor principal"
+    : !fotos.tiene(PUNTO_LICENCIA_PRINCIPAL)
+      ? "Toma la foto de la licencia del conductor principal"
+      : adicionalSinFoto >= 0
+        ? `Toma la foto de la licencia del conductor adicional ${adicionalSinFoto + 1}`
+        : null;
+
   return (
     <PantallaFase
       {...props}
       descripcion="Quién conduce la unidad. Si viaja más de uno, registra al principal y a los adicionales."
-      faltante={!sel ? "Selecciona el conductor principal" : null}
+      faltante={faltante}
       recolectar={() => ({
         conductorId: sel?.id ?? null,
         nombre: sel?.nombre ?? "",
@@ -187,6 +222,7 @@ export function FaseConductor(props: PropsConFoto) {
           fotoServidor={props.fotosServidor?.[PUNTO_LICENCIA_PRINCIPAL]}
           tipoLectura="licencia"
           iaHabilitada={ia}
+          onTieneFoto={(t) => fotos.marcar(PUNTO_LICENCIA_PRINCIPAL, t)}
           onLectura={(d) => {
             const numero = d.numero?.trim();
             const nombre = d.nombre?.trim();
@@ -278,6 +314,7 @@ export function FaseConductor(props: PropsConFoto) {
               fotoServidor={props.fotosServidor?.[extra.fotoClave]}
               tipoLectura="licencia"
               iaHabilitada={ia}
+              onTieneFoto={(t) => fotos.marcar(extra.fotoClave, t)}
               onLectura={(d) => {
                 const numero = d.numero?.trim();
                 const nombre = d.nombre?.trim();
@@ -371,11 +408,19 @@ export function FaseTractor(props: PropsConFoto) {
     setPlacas(placasLeidas ?? v?.detalle ?? "");
   }
 
+  const fotos = useFotosTomadas();
+
   return (
     <PantallaFase
       {...props}
       descripcion="La unidad motriz."
-      faltante={!sel ? "Selecciona el tractor" : null}
+      faltante={
+        !sel
+          ? "Selecciona el tractor"
+          : !fotos.tiene(PUNTO_PLACAS)
+            ? "Toma la foto de las placas del tractor"
+            : null
+      }
       recolectar={() => ({
         tractorId: sel?.id ?? null,
         numero: sel?.nombre ?? "",
@@ -406,6 +451,7 @@ export function FaseTractor(props: PropsConFoto) {
           fotoServidor={props.fotosServidor?.[PUNTO_PLACAS]}
           tipoLectura="placas"
           iaHabilitada={props.iaHabilitada ?? false}
+          onTieneFoto={(t) => fotos.marcar(PUNTO_PLACAS, t)}
           onLectura={(d) => {
             const numero = d.numero?.trim();
             if (!numero) return;
@@ -461,6 +507,8 @@ export function FasePlacasRemolque(props: PropsConFoto) {
     setPlacas(placasLeidas ?? v?.detalle ?? "");
   }
 
+  const fotos = useFotosTomadas();
+
   return (
     <PantallaFase
       {...props}
@@ -469,7 +517,13 @@ export function FasePlacasRemolque(props: PropsConFoto) {
           ? `Identificación de la caja ${caja}.`
           : "Identificación de la unidad de arrastre."
       }
-      faltante={!sel ? "Selecciona o registra la unidad" : null}
+      faltante={
+        !sel
+          ? "Selecciona o registra la unidad"
+          : !fotos.tiene(PUNTO_PLACAS)
+            ? "Toma la foto de las placas"
+            : null
+      }
       recolectar={() => ({
         contenedorId: sel?.id ?? null,
         numero: sel?.nombre ?? "",
@@ -500,6 +554,7 @@ export function FasePlacasRemolque(props: PropsConFoto) {
           fotoServidor={props.fotosServidor?.[PUNTO_PLACAS]}
           tipoLectura="placas"
           iaHabilitada={props.iaHabilitada ?? false}
+          onTieneFoto={(t) => fotos.marcar(PUNTO_PLACAS, t)}
           onLectura={(d) => {
             const numero = d.numero?.trim();
             if (!numero) return;
