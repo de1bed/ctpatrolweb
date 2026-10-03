@@ -109,36 +109,73 @@ export async function guardarFase(
   const datos = validado.data as Record<string, unknown>;
 
   // ── Escritura ─────────────────────────────────────────────────────────────
-  const dataActual =
-    inspeccion.data && typeof inspeccion.data === "object" && !Array.isArray(inspeccion.data)
-      ? (inspeccion.data as Record<string, Json>)
-      : {};
-
-  // La clave del paso (no la de la fase) es lo que indexa: en un full,
-  // "sellos#1" y "sellos#2" son capturas distintas.
-  const nuevaData = { ...dataActual, [clavePaso]: datos as Json };
-
-  const proyeccion = PROYECCIONES[faseId];
-  const columnas = proyeccion ? proyeccion(datos) : {};
-
-  const nuevoProgreso = marcarCompletado(progreso, clavePaso);
-
-  // Tiempo por fase. Se ACUMULA en vez de sobrescribir: si el inspector
-  // vuelve a una pantalla para corregir algo, ese tiempo también es tiempo
-  // que le costó la inspección, y el admin lo necesita para medir de verdad.
-  const tiemposActuales =
-    inspeccion.timings && typeof inspeccion.timings === "object" && !Array.isArray(inspeccion.timings)
-      ? (inspeccion.timings as Record<string, number>)
-      : {};
-
   // Tope de 2 horas por visita: si el inspector dejó la pestaña abierta toda
   // la noche, ese número no mide trabajo y contaminaría el promedio.
   const segundos = Math.min(Math.max(0, Math.round(segundosEnPantalla)), 7200);
 
-  const nuevosTiempos = {
-    ...tiemposActuales,
-    [clavePaso]: (tiemposActuales[clavePaso] ?? 0) + segundos,
-  };
+  // La fase, el progreso y el tiempo se fusionan dentro de Postgres (migración
+  // 0018): si dos personas guardan la misma inspección a la vez, ninguna
+  // borra la fase de la otra. La clave del paso (no la de la fase) es lo que
+  // indexa: en un full, "sellos~1" y "sellos~2" son capturas distintas.
+  const fusion = await supabase
+    .rpc("guardar_fase_inspeccion", {
+      p_id: inspeccionId,
+      p_paso: clavePaso,
+      p_datos: datos as Json,
+      p_segundos: segundos,
+    })
+    .maybeSingle();
+
+  // PGRST202: la función todavía no está en la base. Se guarda como antes,
+  // para que el código pueda desplegarse antes o después de la migración.
+  const sinFusion = fusion.error?.code === "PGRST202";
+
+  if (fusion.error && !sinFusion) {
+    console.error("Error al guardar la fase", { clavePaso, error: fusion.error });
+    return {
+      ok: false,
+      error: "No se pudo guardar. Revisa tu conexión e intenta de nuevo.",
+    };
+  }
+  if (!sinFusion && !fusion.data) {
+    // Ninguna fila: se cerró mientras se capturaba, o RLS ya no deja tocarla.
+    return {
+      ok: false,
+      error: "Esta inspección ya está cerrada y no se puede modificar.",
+    };
+  }
+
+  let nuevaData: Record<string, Json>;
+  let nuevoProgreso: ReturnType<typeof leerProgreso>;
+  let nuevosTiempos: Record<string, number>;
+
+  if (fusion.data) {
+    nuevaData = fusion.data.datos as Record<string, Json>;
+    nuevoProgreso = leerProgreso(fusion.data.progreso);
+    nuevosTiempos = fusion.data.tiempos as Record<string, number>;
+  } else {
+    const dataActual =
+      inspeccion.data && typeof inspeccion.data === "object" && !Array.isArray(inspeccion.data)
+        ? (inspeccion.data as Record<string, Json>)
+        : {};
+    nuevaData = { ...dataActual, [clavePaso]: datos as Json };
+    nuevoProgreso = marcarCompletado(progreso, clavePaso);
+
+    // Tiempo por fase. Se ACUMULA en vez de sobrescribir: si el inspector
+    // vuelve a una pantalla para corregir algo, ese tiempo también es tiempo
+    // que le costó la inspección, y el admin lo necesita para medir de verdad.
+    const tiemposActuales =
+      inspeccion.timings && typeof inspeccion.timings === "object" && !Array.isArray(inspeccion.timings)
+        ? (inspeccion.timings as Record<string, number>)
+        : {};
+    nuevosTiempos = {
+      ...tiemposActuales,
+      [clavePaso]: (tiemposActuales[clavePaso] ?? 0) + segundos,
+    };
+  }
+
+  const proyeccion = PROYECCIONES[faseId];
+  const columnas = proyeccion ? proyeccion(datos) : {};
 
   // Primera captura: la inspección pasa de "asignada" a "en curso".
   const arrancando =
@@ -150,33 +187,41 @@ export async function guardarFase(
   const cerrando = faseId === "firmas";
   const resultado = cerrando ? calcularResultado(nuevaData as Json) : null;
 
-  const { error } = await supabase
-    .from("inspections")
-    .update({
-      ...columnas,
-      data: nuevaData as Json,
-      progress: nuevoProgreso as unknown as Json,
-      timings: nuevosTiempos as unknown as Json,
-      ...(arrancando
-        ? { status: "in_progress" as const, started_at: new Date().toISOString() }
-        : {}),
-      ...(resultado
-        ? {
-            status: "completed" as const,
-            completed_at: new Date().toISOString(),
-            passed: resultado.aprobada,
-            findings_count: resultado.hallazgos,
-            // Suma de los tiempos por pantalla, NO la resta entre inicio y
-            // fin: esa incluiría las horas que la unidad estuvo cargando
-            // durante la pausa, que no son trabajo del inspector.
-            duration_seconds: Object.values(nuevosTiempos).reduce(
-              (a, b) => a + (typeof b === "number" ? b : 0),
-              0
-            ),
-          }
-        : {}),
-    })
-    .eq("id", inspeccionId);
+  const cambios = {
+    ...columnas,
+    ...(sinFusion
+      ? {
+          data: nuevaData as Json,
+          progress: nuevoProgreso as unknown as Json,
+          timings: nuevosTiempos as unknown as Json,
+        }
+      : {}),
+    ...(arrancando
+      ? { status: "in_progress" as const, started_at: new Date().toISOString() }
+      : {}),
+    ...(resultado
+      ? {
+          status: "completed" as const,
+          completed_at: new Date().toISOString(),
+          passed: resultado.aprobada,
+          findings_count: resultado.hallazgos,
+          // Suma de los tiempos por pantalla, NO la resta entre inicio y
+          // fin: esa incluiría las horas que la unidad estuvo cargando
+          // durante la pausa, que no son trabajo del inspector.
+          duration_seconds: Object.values(nuevosTiempos).reduce(
+            (a, b) => a + (typeof b === "number" ? b : 0),
+            0
+          ),
+        }
+      : {}),
+  };
+
+  // Con la fusión hecha, la mayoría de las fases ya no tienen nada más que
+  // escribir: solo las que proyectan columnas, arrancan o cierran.
+  const { error } =
+    Object.keys(cambios).length === 0
+      ? { error: null }
+      : await supabase.from("inspections").update(cambios).eq("id", inspeccionId);
 
   if (error) {
     console.error("Error al guardar la fase", { clavePaso, error });

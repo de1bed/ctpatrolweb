@@ -881,6 +881,19 @@ export type Database = {
         Args: { p_id: string }
         Returns: undefined
       }
+      guardar_fase_inspeccion: {
+        Args: {
+          p_id: string
+          p_paso: string
+          p_datos: Json
+          p_segundos: number
+        }
+        Returns: {
+          datos: Json
+          progreso: Json
+          tiempos: Json
+        }[]
+      }
       eliminar_empresa_plataforma: {
         Args: { p_id: string }
         Returns: undefined
