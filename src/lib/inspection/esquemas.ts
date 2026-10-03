@@ -222,6 +222,12 @@ export const esquemaComentarios = z.object({
     .default([]),
 });
 
+/**
+ * Tope de firmas adicionales. Cada firma viaja como imagen dentro del
+ * expediente; sin tope, el JSON de la inspección crece sin control.
+ */
+export const MAX_FIRMAS_ADICIONALES = 6;
+
 export const esquemaFirmas = z.object({
   inspector: z.object({
     nombre: z.string().trim().min(1, "Falta el nombre del inspector").max(200),
@@ -231,6 +237,21 @@ export const esquemaFirmas = z.object({
     nombre: z.string().trim().min(1, "Falta el nombre del conductor").max(200),
     firma: z.string().min(1, "Falta la firma del conductor"),
   }),
+  /**
+   * Firmas que cada empresa exige según su política: supervisor, caseta,
+   * custodio. El cargo lo escribe quien cierra. Opcional: los expedientes
+   * cerrados antes de que existiera siguen siendo válidos.
+   */
+  adicionales: z
+    .array(
+      z.object({
+        cargo: z.string().trim().min(1, "Falta el cargo de una firma adicional").max(120),
+        nombre: z.string().trim().min(1, "Falta el nombre de una firma adicional").max(200),
+        firma: z.string().min(1, "Falta una firma adicional"),
+      })
+    )
+    .max(MAX_FIRMAS_ADICIONALES)
+    .default([]),
 });
 
 /** Fases sin datos propios: solo se marcan como vistas. */

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
+import { MAX_FIRMAS_ADICIONALES } from "@/lib/inspection/esquemas";
 import { PASOS_VVTT, type PasoVvtt } from "@/lib/inspection/puntos";
 import { GrabadoraVideo } from "@/components/inspection/video-recorder";
 import { borrarFoto, fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
@@ -323,6 +324,7 @@ export function FaseFirmas(
   const guardadas = (props.datosPrevios ?? {}) as {
     inspector?: { nombre?: string; firma?: string };
     conductor?: { nombre?: string; firma?: string };
+    adicionales?: { cargo?: string; nombre?: string; firma?: string }[];
   };
 
   const [nombreInspector, setNombreInspector] = useState(
@@ -338,7 +340,26 @@ export function FaseFirmas(
     guardadas.conductor?.firma ?? null
   );
 
+  // Firmas que pide la política de cada empresa (supervisor, caseta…). La
+  // clave solo sirve para que React no confunda los lienzos al quitar una.
+  const [adicionales, setAdicionales] = useState<FirmaAdicional[]>(() =>
+    (guardadas.adicionales ?? []).map((f) => ({
+      clave: crypto.randomUUID(),
+      cargo: f.cargo ?? "",
+      nombre: f.nombre ?? "",
+      firma: f.firma ?? null,
+    }))
+  );
+
+  function actualizarAdicional(clave: string, cambios: Partial<FirmaAdicional>) {
+    setAdicionales((prev) => prev.map((f) => (f.clave === clave ? { ...f, ...cambios } : f)));
+  }
+
   void previas;
+
+  const adicionalIncompleta = adicionales.findIndex(
+    (f) => !f.cargo.trim() || !f.nombre.trim() || !f.firma
+  );
 
   const falta =
     !nombreInspector.trim()
@@ -349,17 +370,28 @@ export function FaseFirmas(
           ? "Falta el nombre del conductor"
           : !firmaConductor
             ? "Falta la firma del conductor"
-            : null;
+            : adicionalIncompleta >= 0
+              ? `Completa la firma adicional ${adicionalIncompleta + 1} o quítala`
+              : null;
 
   return (
     <PantallaFase
       {...props}
-      descripcion="Ambas firmas cierran la inspección."
+      descripcion={
+        adicionales.length > 0
+          ? "Todas las firmas cierran la inspección."
+          : "Ambas firmas cierran la inspección."
+      }
       etiquetaBoton="Firmar y cerrar inspección"
       faltante={falta}
       recolectar={() => ({
         inspector: { nombre: nombreInspector.trim(), firma: firmaInspector },
         conductor: { nombre: nombreConductor.trim(), firma: firmaConductor },
+        adicionales: adicionales.map((f) => ({
+          cargo: f.cargo.trim(),
+          nombre: f.nombre.trim(),
+          firma: f.firma,
+        })),
       })}
     >
       <Card className="mb-5 flex items-start gap-3 border-warn-500/40 bg-warn-50 p-4 dark:bg-warn-500/10">
@@ -437,10 +469,82 @@ export function FaseFirmas(
             onChange={setFirmaConductor}
           />
         </div>
+
+        {adicionales.map((f, i) => (
+          <div
+            key={f.clave}
+            className="flex flex-col gap-3 rounded-2xl border border-line p-4"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-ink-secondary">
+                Firma adicional {i + 1}
+              </p>
+              <button
+                type="button"
+                aria-label={`Quitar firma adicional ${i + 1}`}
+                onClick={() =>
+                  setAdicionales((prev) => prev.filter((x) => x.clave !== f.clave))
+                }
+                className="flex size-11 items-center justify-center rounded-lg text-danger-600 active:bg-danger-50"
+              >
+                <Trash2 className="size-5" aria-hidden />
+              </button>
+            </div>
+            <Field label="Cargo" required ayuda="Cómo aparece en el reporte. Ej. Supervisor, Caseta norte.">
+              {(p) => (
+                <Input
+                  {...p}
+                  value={f.cargo}
+                  onChange={(e) => actualizarAdicional(f.clave, { cargo: e.target.value })}
+                  placeholder="Supervisor"
+                  maxLength={120}
+                />
+              )}
+            </Field>
+            <Field label="Nombre" required>
+              {(p) => (
+                <Input
+                  {...p}
+                  value={f.nombre}
+                  onChange={(e) => actualizarAdicional(f.clave, { nombre: e.target.value })}
+                  maxLength={200}
+                />
+              )}
+            </Field>
+            <SignaturePad
+              etiqueta={f.cargo.trim() ? `Firma de ${f.cargo.trim()}` : "Firma"}
+              valor={f.firma}
+              onChange={(firma) => actualizarAdicional(f.clave, { firma })}
+            />
+          </div>
+        ))}
+
+        {adicionales.length < MAX_FIRMAS_ADICIONALES && (
+          <Button
+            variant="secondary"
+            onClick={() =>
+              setAdicionales((prev) => [
+                ...prev,
+                { clave: crypto.randomUUID(), cargo: "", nombre: "", firma: null },
+              ])
+            }
+            className="justify-start"
+          >
+            <Plus className="size-5" aria-hidden />
+            Agregar firma
+          </Button>
+        )}
       </div>
     </PantallaFase>
   );
 }
+
+type FirmaAdicional = {
+  clave: string;
+  cargo: string;
+  nombre: string;
+  firma: string | null;
+};
 
 /**
  * Fase · Pausa de carga.
