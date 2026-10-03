@@ -1,12 +1,17 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
+import {
+  CapturaIdentificacion,
+  type FotoServidor,
+} from "@/components/inspection/captura-identificacion";
 import { CatalogPicker, type SeleccionCatalogo } from "@/components/inspection/catalog-picker";
 import { PantallaFase } from "@/components/inspection/phase-shell";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
+import { PUNTO_LICENCIA_PRINCIPAL, PUNTO_PLACAS } from "@/lib/inspection/identificacion";
 
 import { previo, type PropsFase } from "./tipos";
 
@@ -25,6 +30,30 @@ type PropsConPermisos = PropsFase & {
     puedeCrearContenedor: boolean;
   };
 };
+
+/**
+ * Lo que necesitan las fases con foto de identificación (licencia o placas).
+ * Todo opcional: sin ello la fase funciona igual que antes, solo sin foto.
+ */
+type PropsConFoto = PropsConPermisos & {
+  latitud?: number | null;
+  longitud?: number | null;
+  /** La empresa tiene IA autorizada, encendida y con créditos. */
+  iaHabilitada?: boolean;
+  /** Fotos ya subidas de este paso, la más reciente por punto. */
+  fotosServidor?: Record<string, FotoServidor>;
+};
+
+function mismoNombre(a: string, b: string): boolean {
+  const normal = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toUpperCase();
+  return normal(a) === normal(b);
+}
 
 export function FaseCliente(props: PropsConPermisos) {
   const [sel, setSel] = useState<SeleccionCatalogo | null>(
@@ -63,9 +92,15 @@ type ExtraConductor = {
   id: string | null;
   nombre: string;
   licencia: string;
+  /** Punto de su foto de licencia. Estable aunque cambie su posición. */
+  fotoClave: string;
+  /** Nombre leído de su licencia, para buscarlo en el catálogo. */
+  sugerencia?: string;
+  /** Número leído con IA; manda sobre el del catálogo al elegirlo. */
+  licenciaLeida?: string;
 };
 
-export function FaseConductor(props: PropsConPermisos) {
+export function FaseConductor(props: PropsConFoto) {
   const [sel, setSel] = useState<SeleccionCatalogo | null>(() => {
     const nombre = previo(props.datosPrevios, "nombre", "");
     const licencia = previo(props.datosPrevios, "licencia", "");
@@ -87,18 +122,39 @@ export function FaseConductor(props: PropsConPermisos) {
         id?: string | null;
         nombre: string;
         licencia?: string;
+        fotoClave?: string;
       }>
-    >(props.datosPrevios, "adicionales", []).map((c) => ({
+    >(props.datosPrevios, "adicionales", []).map((c, i) => ({
       id: c.id ?? c.conductorId ?? null,
       nombre: c.nombre,
       licencia: c.licencia ?? "",
+      // Los capturados antes de que existiera la foto no traen clave; se les
+      // da una fija por posición para que no cambie entre renders.
+      fotoClave: c.fotoClave || `licencia-adicional-${i + 1}`,
     }))
   );
 
+  // Lo que la IA leyó de la licencia del principal.
+  const [sugerencia, setSugerencia] = useState<string | undefined>(undefined);
+  const [licenciaLeida, setLicenciaLeida] = useState<string | null>(null);
+  const [nombreLeido, setNombreLeido] = useState<string | null>(null);
+
+  const latitud = props.latitud ?? null;
+  const longitud = props.longitud ?? null;
+  const ia = props.iaHabilitada ?? false;
+
   function elegirPrincipal(v: SeleccionCatalogo | null) {
     setSel(v);
-    setLicencia(v?.detalle ?? "");
+    // La licencia que se tiene en la mano manda sobre la del catálogo.
+    setLicencia(licenciaLeida ?? v?.detalle ?? "");
   }
+
+  function actualizarExtra(i: number, cambios: Partial<ExtraConductor>) {
+    setAdicionales((prev) => prev.map((c, j) => (j === i ? { ...c, ...cambios } : c)));
+  }
+
+  const nombreNoCoincide =
+    sel && nombreLeido && !mismoNombre(sel.nombre, nombreLeido) ? nombreLeido : null;
 
   return (
     <PantallaFase
@@ -115,10 +171,36 @@ export function FaseConductor(props: PropsConPermisos) {
             conductorId: c.id,
             nombre: c.nombre,
             licencia: c.licencia,
+            fotoClave: c.fotoClave,
           })),
       })}
     >
       <div className="flex flex-col gap-5">
+        <CapturaIdentificacion
+          inspeccionId={props.inspeccionId}
+          clavePaso={props.clavePaso}
+          puntoClave={PUNTO_LICENCIA_PRINCIPAL}
+          puntoNombre="Licencia del conductor principal"
+          etiquetaBoton="Tomar foto de la licencia"
+          latitud={latitud}
+          longitud={longitud}
+          fotoServidor={props.fotosServidor?.[PUNTO_LICENCIA_PRINCIPAL]}
+          tipoLectura="licencia"
+          iaHabilitada={ia}
+          onLectura={(d) => {
+            const numero = d.numero?.trim();
+            const nombre = d.nombre?.trim();
+            if (numero) {
+              setLicencia(numero);
+              setLicenciaLeida(numero);
+            }
+            if (nombre) {
+              setNombreLeido(nombre);
+              if (!sel) setSugerencia(nombre);
+            }
+          }}
+        />
+
         <CatalogPicker
           tipo="conductor"
           etiqueta="Conductor principal"
@@ -129,12 +211,27 @@ export function FaseConductor(props: PropsConPermisos) {
           puedeCrear={props.permisos.puedeCrearConductor}
           seleccionado={sel}
           onSeleccionar={elegirPrincipal}
+          sugerencia={sugerencia}
         />
 
-        {sel && !licencia.trim() && (
+        {nombreNoCoincide && (
+          <p className="flex items-start gap-2 rounded-xl border border-warn-500/40 bg-warn-50 px-4 py-3 text-sm text-ink-secondary dark:bg-warn-500/10">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn-600" aria-hidden />
+            <span>
+              La licencia dice «{nombreNoCoincide}». Verifica que sea el
+              conductor seleccionado.
+            </span>
+          </p>
+        )}
+
+        {sel && (
           <Field
             label="Número de licencia"
-            hint="No estaba en el catálogo. Captúralo una vez."
+            hint={
+              sel.detalle
+                ? undefined
+                : "No estaba en el catálogo. Captúralo una vez."
+            }
             ayuda="Número de la licencia de conducir. Está en el anverso, junto a la foto."
           >
             {(p) => (
@@ -152,7 +249,7 @@ export function FaseConductor(props: PropsConPermisos) {
 
         {adicionales.map((extra, i) => (
           <div
-            key={`${extra.id ?? "n"}-${i}`}
+            key={extra.fotoClave}
             className="flex flex-col gap-3 rounded-2xl border border-line p-4"
           >
             <div className="flex items-center justify-between gap-2">
@@ -170,6 +267,26 @@ export function FaseConductor(props: PropsConPermisos) {
                 <Trash2 className="size-5" aria-hidden />
               </button>
             </div>
+            <CapturaIdentificacion
+              inspeccionId={props.inspeccionId}
+              clavePaso={props.clavePaso}
+              puntoClave={extra.fotoClave}
+              puntoNombre="Licencia de conductor adicional"
+              etiquetaBoton="Tomar foto de la licencia"
+              latitud={latitud}
+              longitud={longitud}
+              fotoServidor={props.fotosServidor?.[extra.fotoClave]}
+              tipoLectura="licencia"
+              iaHabilitada={ia}
+              onLectura={(d) => {
+                const numero = d.numero?.trim();
+                const nombre = d.nombre?.trim();
+                actualizarExtra(i, {
+                  ...(numero ? { licencia: numero, licenciaLeida: numero } : {}),
+                  ...(nombre && !extra.nombre ? { sugerencia: nombre } : {}),
+                });
+              }}
+            />
             <CatalogPicker
               tipo="conductor"
               etiqueta="Nombre"
@@ -181,33 +298,22 @@ export function FaseConductor(props: PropsConPermisos) {
                   ? { id: extra.id, nombre: extra.nombre, detalle: extra.licencia || null }
                   : null
               }
+              sugerencia={extra.sugerencia}
               onSeleccionar={(v) =>
-                setAdicionales((prev) =>
-                  prev.map((c, j) =>
-                    j === i
-                      ? {
-                          id: v?.id ?? null,
-                          nombre: v?.nombre ?? "",
-                          licencia: v?.detalle ?? "",
-                        }
-                      : c
-                  )
-                )
+                actualizarExtra(i, {
+                  id: v?.id ?? null,
+                  nombre: v?.nombre ?? "",
+                  licencia: extra.licenciaLeida ?? v?.detalle ?? "",
+                })
               }
             />
-            {extra.nombre && !extra.licencia.trim() && (
+            {extra.nombre && (
               <Field label="Número de licencia">
                 {(p) => (
                   <Input
                     {...p}
                     value={extra.licencia}
-                    onChange={(e) =>
-                      setAdicionales((prev) =>
-                        prev.map((c, j) =>
-                          j === i ? { ...c, licencia: e.target.value } : c
-                        )
-                      )
-                    }
+                    onChange={(e) => actualizarExtra(i, { licencia: e.target.value })}
                     autoCapitalize="characters"
                   />
                 )}
@@ -222,7 +328,12 @@ export function FaseConductor(props: PropsConPermisos) {
             onClick={() =>
               setAdicionales((prev) => [
                 ...prev,
-                { id: null, nombre: "", licencia: "" },
+                {
+                  id: null,
+                  nombre: "",
+                  licencia: "",
+                  fotoClave: `licencia-${crypto.randomUUID()}`,
+                },
               ])
             }
             className="justify-start"
@@ -236,7 +347,7 @@ export function FaseConductor(props: PropsConPermisos) {
   );
 }
 
-export function FaseTractor(props: PropsConPermisos) {
+export function FaseTractor(props: PropsConFoto) {
   const [sel, setSel] = useState<SeleccionCatalogo | null>(() => {
     const numero = previo(props.datosPrevios, "numero", "");
     const placas = previo(props.datosPrevios, "placas", "");
@@ -251,10 +362,13 @@ export function FaseTractor(props: PropsConPermisos) {
   const [placas, setPlacas] = useState(() =>
     previo(props.datosPrevios, "placas", "")
   );
+  // Las placas leídas de la foto mandan sobre las del catálogo: son las que
+  // trae la unidad hoy.
+  const [placasLeidas, setPlacasLeidas] = useState<string | null>(null);
 
   function elegir(v: SeleccionCatalogo | null) {
     setSel(v);
-    setPlacas(v?.detalle ?? "");
+    setPlacas(placasLeidas ?? v?.detalle ?? "");
   }
 
   return (
@@ -281,10 +395,29 @@ export function FaseTractor(props: PropsConPermisos) {
           onSeleccionar={elegir}
         />
 
-        {sel && !placas.trim() && (
+        <CapturaIdentificacion
+          inspeccionId={props.inspeccionId}
+          clavePaso={props.clavePaso}
+          puntoClave={PUNTO_PLACAS}
+          puntoNombre="Placas del tractor"
+          etiquetaBoton="Tomar foto de las placas"
+          latitud={props.latitud ?? null}
+          longitud={props.longitud ?? null}
+          fotoServidor={props.fotosServidor?.[PUNTO_PLACAS]}
+          tipoLectura="placas"
+          iaHabilitada={props.iaHabilitada ?? false}
+          onLectura={(d) => {
+            const numero = d.numero?.trim();
+            if (!numero) return;
+            setPlacas(numero);
+            setPlacasLeidas(numero);
+          }}
+        />
+
+        {sel && (
           <Field
             label="Placas"
-            hint="No estaban en el catálogo. Captúralas una vez."
+            hint={sel.detalle ? undefined : "No estaban en el catálogo. Captúralas una vez."}
             ayuda="Placas de la unidad motriz, como aparecen en la lámina frontal o trasera."
           >
             {(p) => (
@@ -304,7 +437,7 @@ export function FaseTractor(props: PropsConPermisos) {
   );
 }
 
-export function FasePlacasRemolque(props: PropsConPermisos) {
+export function FasePlacasRemolque(props: PropsConFoto) {
   const [sel, setSel] = useState<SeleccionCatalogo | null>(() => {
     const numero = previo(props.datosPrevios, "numero", "");
     const placas = previo(props.datosPrevios, "placas", "");
@@ -319,12 +452,13 @@ export function FasePlacasRemolque(props: PropsConPermisos) {
   const [placas, setPlacas] = useState(() =>
     previo(props.datosPrevios, "placas", "")
   );
+  const [placasLeidas, setPlacasLeidas] = useState<string | null>(null);
 
   const caja = props.contexto.unidad;
 
   function elegir(v: SeleccionCatalogo | null) {
     setSel(v);
-    setPlacas(v?.detalle ?? "");
+    setPlacas(placasLeidas ?? v?.detalle ?? "");
   }
 
   return (
@@ -355,10 +489,29 @@ export function FasePlacasRemolque(props: PropsConPermisos) {
           onSeleccionar={elegir}
         />
 
-        {sel && !placas.trim() && (
+        <CapturaIdentificacion
+          inspeccionId={props.inspeccionId}
+          clavePaso={props.clavePaso}
+          puntoClave={PUNTO_PLACAS}
+          puntoNombre={caja ? `Placas de la caja ${caja}` : "Placas del remolque"}
+          etiquetaBoton="Tomar foto de las placas"
+          latitud={props.latitud ?? null}
+          longitud={props.longitud ?? null}
+          fotoServidor={props.fotosServidor?.[PUNTO_PLACAS]}
+          tipoLectura="placas"
+          iaHabilitada={props.iaHabilitada ?? false}
+          onLectura={(d) => {
+            const numero = d.numero?.trim();
+            if (!numero) return;
+            setPlacas(numero);
+            setPlacasLeidas(numero);
+          }}
+        />
+
+        {sel && (
           <Field
             label="Placas"
-            hint="No estaban en el catálogo. Captúralas una vez."
+            hint={sel.detalle ? undefined : "No estaban en el catálogo. Captúralas una vez."}
           >
             {(p) => (
               <Input

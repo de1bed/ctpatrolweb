@@ -6,6 +6,12 @@ import type { Metadata } from "next";
 import { requerirSesion } from "@/lib/auth";
 import { construirFlujo, faseIdDeClave } from "@/lib/inspection/flujo";
 import { leerProgreso } from "@/lib/inspection/progreso";
+import {
+  FASES_IDENTIFICACION,
+  PUNTO_LICENCIA_PRINCIPAL,
+  PUNTO_PLACAS,
+  ultimaPorPunto,
+} from "@/lib/inspection/identificacion";
 import { calcularResultado } from "@/lib/inspection/resultado";
 import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
 import { capacidadesDe } from "@/lib/inspection/transporte";
@@ -67,8 +73,18 @@ export default async function ReportePage({
   const fotosDocumento = todaLaEvidencia.filter(
     (m) => m.kind !== "video" && faseIdDeClave(m.phase) === "documentos"
   );
+  // Licencia y placas tienen su propia sección: no son evidencia de un punto
+  // de inspección, y mezclarlas con las 41 fotos las hace imposibles de ubicar.
+  const esIdentificacion = (fase: string) =>
+    (FASES_IDENTIFICACION as readonly string[]).includes(faseIdDeClave(fase));
+  const fotosIdentificacion = todaLaEvidencia.filter(
+    (m) => m.kind !== "video" && esIdentificacion(m.phase)
+  );
   const fotos = todaLaEvidencia.filter(
-    (m) => m.kind !== "video" && faseIdDeClave(m.phase) !== "documentos"
+    (m) =>
+      m.kind !== "video" &&
+      faseIdDeClave(m.phase) !== "documentos" &&
+      !esIdentificacion(m.phase)
   );
   const videos = todaLaEvidencia.filter((m) => m.kind === "video");
 
@@ -296,6 +312,18 @@ export default async function ReportePage({
         <DocumentosReporte
           datos={datos["documentos"]}
           fotos={fotosDocumento}
+          urlPorRuta={urlPorRuta}
+        />
+
+        {/* ── Conductor y unidad: licencia y placas ───────────────────── */}
+        <IdentificacionReporte
+          datos={datos}
+          conductorColumna={inspeccion.driver_name}
+          tractorColumna={inspeccion.tractor_number}
+          pasosRemolque={flujo.pasos
+            .filter((p) => p.fase.id === "placas-remolque")
+            .map((p) => ({ clave: p.clave, titulo: p.titulo }))}
+          fotos={fotosIdentificacion}
           urlPorRuta={urlPorRuta}
         />
 
@@ -577,6 +605,165 @@ function DocumentosReporte({
                   />
                   <figcaption>
                     <strong>{foto.point_label ?? foto.point_key ?? "Documento"}</strong>
+                    <br />
+                    {format(new Date(foto.captured_at), "dd/MM/yyyy HH:mm:ss")}
+                    {foto.latitude != null && foto.longitude != null && (
+                      <>
+                        <br />
+                        {foto.latitude.toFixed(5)}, {foto.longitude.toFixed(5)}
+                      </>
+                    )}
+                  </figcaption>
+                </figure>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+type FotoReporte = {
+  id: string;
+  phase: string;
+  point_label: string | null;
+  point_key: string | null;
+  storage_path: string | null;
+  captured_at: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+/**
+ * Conductor (con su licencia) y unidad (con sus placas), con las fotos que
+ * los respaldan.
+ *
+ * Todo se lee de `data` con cuidado: es JSONB, y las inspecciones anteriores a
+ * la foto de licencia y placas no la traen. En ese caso la sección sale solo
+ * con los datos, sin huecos.
+ */
+function IdentificacionReporte({
+  datos,
+  conductorColumna,
+  tractorColumna,
+  pasosRemolque,
+  fotos,
+  urlPorRuta,
+}: {
+  datos: Record<string, Record<string, unknown>>;
+  conductorColumna: string | null;
+  tractorColumna: string | null;
+  pasosRemolque: { clave: string; titulo: string }[];
+  fotos: FotoReporte[];
+  urlPorRuta: Map<string, string>;
+}) {
+  const conductor = datos["conductor"];
+  const tractor = datos["tractor"];
+
+  const principal = {
+    nombre: textoDe(conductor?.nombre) || (conductorColumna ?? "").trim(),
+    licencia: textoDe(conductor?.licencia),
+  };
+  const adicionales = Array.isArray(conductor?.adicionales)
+    ? conductor.adicionales.flatMap((a) => {
+        if (!a || typeof a !== "object") return [];
+        const x = a as { nombre?: unknown; licencia?: unknown; fotoClave?: unknown };
+        const nombre = textoDe(x.nombre);
+        if (!nombre) return [];
+        return [{ nombre, licencia: textoDe(x.licencia), fotoClave: textoDe(x.fotoClave) }];
+      })
+    : [];
+
+  const unidades = [
+    {
+      clave: "tractor",
+      titulo: "Tractor",
+      numero: textoDe(tractor?.numero) || (tractorColumna ?? "").trim(),
+      placas: textoDe(tractor?.placas),
+    },
+    ...pasosRemolque.map((p) => ({
+      clave: p.clave,
+      titulo: p.titulo,
+      numero: textoDe(datos[p.clave]?.numero),
+      placas: textoDe(datos[p.clave]?.placas),
+    })),
+  ].filter((u) => u.numero || u.placas);
+
+  // Solo la foto vigente de cada punto, y solo de conductores que siguen
+  // capturados: si se quitó un adicional, su licencia no debe aparecer.
+  const vigentes = ultimaPorPunto(fotos);
+  const fotoDe = (fase: string, punto: string) =>
+    punto ? vigentes.get(`${fase}|${punto}`) : undefined;
+
+  const fotosOrdenadas: { foto: FotoReporte; titulo: string }[] = [];
+  const agregar = (foto: FotoReporte | undefined, titulo: string) => {
+    if (foto) fotosOrdenadas.push({ foto, titulo });
+  };
+  agregar(
+    fotoDe("conductor", PUNTO_LICENCIA_PRINCIPAL),
+    principal.nombre ? `Licencia · ${principal.nombre}` : "Licencia del conductor"
+  );
+  for (const a of adicionales) {
+    agregar(fotoDe("conductor", a.fotoClave), `Licencia · ${a.nombre}`);
+  }
+  for (const u of [{ clave: "tractor", titulo: "Tractor" }, ...pasosRemolque]) {
+    agregar(fotoDe(u.clave, PUNTO_PLACAS), `Placas · ${u.titulo}`);
+  }
+
+  const hayDatos = Boolean(
+    principal.nombre || adicionales.length || unidades.length || fotosOrdenadas.length
+  );
+  if (!hayDatos) return null;
+
+  return (
+    <section>
+      <h2>Conductor y unidad</h2>
+      <dl className="reporte__datos">
+        {principal.nombre && (
+          <>
+            <div>
+              <dt>Conductor</dt>
+              <dd>{principal.nombre}</dd>
+            </div>
+            <div>
+              <dt>Licencia</dt>
+              <dd>{principal.licencia || "—"}</dd>
+            </div>
+          </>
+        )}
+        {adicionales.map((a, i) => (
+          <div key={`${a.nombre}-${i}`}>
+            <dt>Conductor adicional {adicionales.length > 1 ? i + 1 : ""}</dt>
+            <dd>
+              {a.nombre}
+              {a.licencia ? ` · Lic. ${a.licencia}` : ""}
+            </dd>
+          </div>
+        ))}
+        {unidades.map((u) => (
+          <div key={u.clave}>
+            <dt>{u.titulo}</dt>
+            <dd>
+              {u.numero || "—"}
+              {` · Placas ${u.placas || "—"}`}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {fotosOrdenadas.length > 0 && (
+        <div className="reporte__fotos">
+          {fotosOrdenadas.map(({ foto, titulo }) => {
+            const url = foto.storage_path ? urlPorRuta.get(foto.storage_path) : null;
+            if (!url) return null;
+            return (
+              <div className="reporte__foto" key={foto.id}>
+                <figure>
+                  {/* Carga ansiosa: ver la nota de la evidencia fotográfica. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={titulo} loading="eager" />
+                  <figcaption>
+                    <strong>{titulo}</strong>
                     <br />
                     {format(new Date(foto.captured_at), "dd/MM/yyyy HH:mm:ss")}
                     {foto.latitude != null && foto.longitude != null && (

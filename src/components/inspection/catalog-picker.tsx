@@ -40,6 +40,7 @@ export function CatalogPicker({
   ayuda,
   ayudaDetalle,
   required = true,
+  sugerencia,
 }: {
   tipo: TipoCatalogo;
   etiqueta: string;
@@ -52,8 +53,21 @@ export function CatalogPicker({
   ayuda?: string;
   ayudaDetalle?: string;
   required?: boolean;
+  /**
+   * Texto que llega de fuera para buscar (ej. el nombre leído de la
+   * licencia). Cada valor nuevo reemplaza la búsqueda; no elige solo.
+   */
+  sugerencia?: string;
 }) {
   const [termino, setTermino] = useState("");
+
+  // Ajuste durante el render, no en un efecto: así la búsqueda arranca con
+  // el texto nuevo sin un render intermedio con el término viejo.
+  const [sugerenciaVista, setSugerenciaVista] = useState(sugerencia);
+  if (sugerencia !== sugerenciaVista) {
+    setSugerenciaVista(sugerencia);
+    if (sugerencia && !seleccionado) setTermino(sugerencia);
+  }
   const [resultados, setResultados] = useState<ItemCatalogo[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [creando, setCreando] = useState(false);

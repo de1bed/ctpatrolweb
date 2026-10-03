@@ -304,7 +304,17 @@ export function FaseSellos(
  * Cierra la inspección. Después de esto el expediente queda inmutable para el
  * inspector, así que la pantalla lo dice antes de que firme, no después.
  */
-export function FaseFirmas(props: PropsFase) {
+export function FaseFirmas(
+  props: PropsFase & {
+    /**
+     * Conductores capturados en su fase, el principal primero. El nombre de
+     * quien firma se toma de aquí: pedirlo otra vez invitaba a escribirlo
+     * distinto y el reporte quedaba con dos nombres para la misma persona.
+     */
+    conductores?: string[];
+  }
+) {
+  const conductores = props.conductores ?? [];
   const previas = previo<{
     inspector?: { nombre?: string; firma?: string };
     conductor?: { nombre?: string; firma?: string };
@@ -322,7 +332,7 @@ export function FaseFirmas(props: PropsFase) {
     guardadas.inspector?.firma ?? null
   );
   const [nombreConductor, setNombreConductor] = useState(
-    guardadas.conductor?.nombre ?? ""
+    guardadas.conductor?.nombre || conductores[0] || ""
   );
   const [firmaConductor, setFirmaConductor] = useState<string | null>(
     guardadas.conductor?.firma ?? null
@@ -379,7 +389,40 @@ export function FaseFirmas(props: PropsFase) {
         </div>
 
         <div className="flex flex-col gap-3">
-          <Field label="Nombre del conductor" required>
+          {conductores.length > 1 && (
+            <div>
+              <p className="mb-2 text-sm font-medium text-ink-secondary">
+                ¿Quién firma?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {conductores.map((nombre) => (
+                  <button
+                    key={nombre}
+                    type="button"
+                    aria-pressed={nombreConductor === nombre}
+                    onClick={() => setNombreConductor(nombre)}
+                    className={cn(
+                      "min-h-11 rounded-xl border-2 px-3.5 text-sm font-semibold transition-colors",
+                      nombreConductor === nombre
+                        ? "border-brand-600 bg-brand-50 text-ink dark:bg-brand-950/50"
+                        : "border-line bg-surface text-ink-secondary"
+                    )}
+                  >
+                    {nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <Field
+            label="Nombre del conductor"
+            required
+            hint={
+              conductores.includes(nombreConductor)
+                ? "Tomado de la fase Conductor."
+                : undefined
+            }
+          >
             {(p) => (
               <Input
                 {...p}

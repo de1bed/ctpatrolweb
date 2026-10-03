@@ -46,6 +46,9 @@ export async function fotosDeVerificacion(
     .not("storage_path", "is", null)
     .in("kind", ["photo", "video"])
     .neq("phase", "documentos")
+    // La licencia es un dato personal del conductor: va en el reporte
+    // interno, no en una página que abre cualquiera con el QR.
+    .neq("phase", "conductor")
     .order("phase")
     .order("sort_order");
 

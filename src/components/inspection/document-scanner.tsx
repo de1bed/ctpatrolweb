@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ImageIcon, LoaderCircle, ScanLine, TriangleAlert, X } from "lucide-react";
+import { AlertCircle, Camera, ImageIcon, LoaderCircle, ScanLine, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { escanearDocumento } from "@/app/(flujo)/inspeccion/[id]/ocr-acciones";
@@ -79,6 +79,9 @@ export function EscanerDocumentos({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Respaldo cuando el visor en vivo falla: abre la cámara del sistema.
+  // `capture` va a la cámara, no a la galería.
+  const archivoCamaraRef = useRef<HTMLInputElement>(null);
   const etiqueta = textoObjetivo(objetivo).etiqueta;
 
   const [estado, setEstado] = useState<"abriendo" | "lista" | "leyendo" | "error">(
@@ -165,6 +168,16 @@ export function EscanerDocumentos({
       return;
     }
 
+    await leerYArchivar(blob);
+  }
+
+  async function desdeCamaraDelSistema(archivo: File) {
+    setEstado("leyendo");
+    setError(null);
+    await leerYArchivar(archivo);
+  }
+
+  async function leerYArchivar(blob: Blob) {
     try {
       let resultado: { ok: true; datos: LecturaCampo } | { ok: false; error: string } | null =
         null;
@@ -182,6 +195,18 @@ export function EscanerDocumentos({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
+      <input
+        ref={archivoCamaraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="absolute h-px w-px opacity-0"
+        onChange={(e) => {
+          const archivo = e.target.files?.[0];
+          e.target.value = "";
+          if (archivo) void desdeCamaraDelSistema(archivo);
+        }}
+      />
       <div className="flex items-center gap-3 px-gutter pt-safe">
         <div className="flex min-h-14 flex-1 flex-col justify-center">
           <p className="text-base font-semibold text-white">Escanear {etiqueta}</p>
@@ -233,6 +258,13 @@ export function EscanerDocumentos({
             <TriangleAlert className="size-10 text-warn-500" aria-hidden />
             <p className="text-lg font-semibold">No se pudo abrir la cámara en vivo</p>
             <p className="text-white/80">{error}</p>
+            <Button
+              size="lg"
+              onClick={() => archivoCamaraRef.current?.click()}
+            >
+              <Camera className="size-5" aria-hidden />
+              Tomar foto con la cámara
+            </Button>
           </div>
         )}
       </div>

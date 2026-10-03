@@ -27,7 +27,9 @@ import {
 } from "@/components/inspection/fases/texto-libre";
 import { FaseTipoTransporte } from "@/components/inspection/fases/tipo-transporte";
 import { FaseVisual } from "@/components/inspection/fases/visual";
+import type { FotoServidor } from "@/components/inspection/captura-identificacion";
 import { obtenerPermisos, requerirSesion } from "@/lib/auth";
+import { ultimaPorPunto } from "@/lib/inspection/identificacion";
 import type { FaseId } from "@/lib/inspection/fases";
 import { construirFlujo, puedeAbrir } from "@/lib/inspection/flujo";
 import { leerProgreso } from "@/lib/inspection/progreso";
@@ -151,7 +153,9 @@ export default async function PasoPage({
       );
 
     case "firmas":
-      return <FaseFirmas {...base} />;
+      // El conductor ya se capturó en su fase: la firma lo toma de ahí en
+      // vez de volver a pedir el nombre.
+      return <FaseFirmas {...base} conductores={conductoresCapturados(datos)} />;
 
     // ── Fases con permisos de catálogo ────────────────────────────────────
     case "cliente":
@@ -162,9 +166,24 @@ export default async function PasoPage({
       const conPermisos = { ...base, permisos };
 
       if (faseId === "cliente") return <FaseCliente {...conPermisos} />;
-      if (faseId === "conductor") return <FaseConductor {...conPermisos} />;
-      if (faseId === "tractor") return <FaseTractor {...conPermisos} />;
-      return <FasePlacasRemolque {...conPermisos} />;
+
+      // Licencia y placas llevan foto: se necesitan las ya subidas (el
+      // teléfono libera su copia al subirla) y si hay IA para leerlas.
+      const [fotosServidor, iaHabilitada] = await Promise.all([
+        fotosDePasoServidor(supabase, id, clavePaso),
+        iaDisponible(supabase, sesion.companyAccountId),
+      ]);
+      const conFoto = {
+        ...conPermisos,
+        latitud: inspeccion.latitude,
+        longitud: inspeccion.longitude,
+        fotosServidor,
+        iaHabilitada,
+      };
+
+      if (faseId === "conductor") return <FaseConductor {...conFoto} />;
+      if (faseId === "tractor") return <FaseTractor {...conFoto} />;
+      return <FasePlacasRemolque {...conFoto} />;
     }
 
     // ── Documentos: puede venir precargado desde el panel ─────────────────
@@ -195,6 +214,8 @@ export default async function PasoPage({
         return [{ id: m.id, nombre: m.point_label ?? "Documento", url }];
       });
 
+      const iaHabilitada = await iaDisponible(supabase, sesion.companyAccountId);
+
       return (
         <FaseDocumentos
           {...base}
@@ -202,6 +223,7 @@ export default async function PasoPage({
           latitud={inspeccion.latitude}
           longitud={inspeccion.longitude}
           fotosServidor={fotosServidor}
+          iaHabilitada={iaHabilitada}
         />
       );
     }
@@ -296,6 +318,80 @@ export default async function PasoPage({
       );
     }
   }
+}
+
+type ClienteSupabase = Awaited<ReturnType<typeof createClient>>;
+
+/** La empresa tiene IA autorizada, encendida y con créditos. */
+async function iaDisponible(
+  supabase: ClienteSupabase,
+  companyAccountId: string
+): Promise<boolean> {
+  const { data: cuentaIa } = await supabase
+    .from("company_accounts")
+    .select("ia_plataforma, ia_activa, creditos_ia")
+    .eq("id", companyAccountId)
+    .maybeSingle();
+  return Boolean(
+    cuentaIa?.ia_plataforma && cuentaIa.ia_activa && cuentaIa.creditos_ia > 0
+  );
+}
+
+/** Fotos ya subidas de un paso, la más reciente por punto, con URL firmada. */
+async function fotosDePasoServidor(
+  supabase: ClienteSupabase,
+  inspeccionId: string,
+  clavePaso: string
+): Promise<Record<string, FotoServidor>> {
+  const { data: media } = await supabase
+    .from("inspection_media")
+    .select("id, phase, point_key, storage_path, captured_at")
+    .eq("inspection_id", inspeccionId)
+    .eq("phase", clavePaso)
+    .eq("kind", "photo")
+    .not("storage_path", "is", null);
+
+  const vigentes = [...ultimaPorPunto(media ?? []).values()];
+  const rutas = vigentes
+    .map((m) => m.storage_path)
+    .filter((p): p is string => Boolean(p));
+  if (rutas.length === 0) return {};
+
+  const { data: firmados } = await supabase.storage
+    .from("inspection-media")
+    .createSignedUrls(rutas, 60 * 60);
+  const urlPorRuta = new Map<string, string>();
+  for (const f of firmados ?? []) {
+    if (f.path && f.signedUrl) urlPorRuta.set(f.path, f.signedUrl);
+  }
+
+  const fotos: Record<string, FotoServidor> = {};
+  for (const m of vigentes) {
+    const url = m.storage_path ? urlPorRuta.get(m.storage_path) : undefined;
+    if (m.point_key && url) fotos[m.point_key] = { id: m.id, url };
+  }
+  return fotos;
+}
+
+/**
+ * Nombres capturados en la fase de conductor: el principal primero.
+ *
+ * Se lee con cuidado porque `data` es JSONB y puede traer formas viejas.
+ */
+function conductoresCapturados(datos: Record<string, unknown>): string[] {
+  const fase = datos["conductor"];
+  if (!fase || typeof fase !== "object") return [];
+  const c = fase as { nombre?: unknown; adicionales?: unknown };
+
+  const nombres: string[] = [];
+  if (typeof c.nombre === "string" && c.nombre.trim()) nombres.push(c.nombre.trim());
+  if (Array.isArray(c.adicionales)) {
+    for (const a of c.adicionales) {
+      const nombre = (a as { nombre?: unknown } | null)?.nombre;
+      if (typeof nombre === "string" && nombre.trim()) nombres.push(nombre.trim());
+    }
+  }
+  return [...new Set(nombres)];
 }
 
 /**

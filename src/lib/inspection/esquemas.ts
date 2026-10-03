@@ -113,6 +113,12 @@ const esquemaConductorExtra = z.object({
   conductorId: z.string().uuid().nullable().optional(),
   nombre: z.string().trim().min(1, "Falta el nombre del conductor").max(200),
   licencia: textoOpcional,
+  /**
+   * Punto de la foto de su licencia en inspection_media. Solo los
+   * adicionales lo llevan: su posición en la lista cambia si se quita uno, y
+   * la foto tiene que seguir siendo de la misma persona.
+   */
+  fotoClave: z.string().trim().max(80).optional(),
 });
 
 export const esquemaConductor = esquemaConductorExtra.extend({

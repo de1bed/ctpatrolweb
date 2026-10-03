@@ -1,8 +1,9 @@
 "use client";
 
-import { ImageIcon, Plus, ScanLine, Thermometer, Trash2, TriangleAlert } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Camera, Plus, ScanLine, Thermometer, Trash2, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 
+import { CamaraPantallaCompleta } from "@/components/inspection/camera";
 import { PantallaFase } from "@/components/inspection/phase-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,13 +12,12 @@ import { OptionCards } from "@/components/ui/option-cards";
 
 import {
   EscanerDocumentos,
-  procesarImagenDocumento,
   type LecturaCampo,
 } from "@/components/inspection/document-scanner";
 import { textoObjetivo, type ObjetivoDocumento } from "@/lib/ai/campos-documento";
 import { cn } from "@/lib/cn";
 import { fotosDePaso, guardarFoto, type FotoLocal } from "@/lib/media/almacen";
-import { capturarDeArchivo } from "@/lib/media/camara";
+import { capturarDeArchivo, type FotoCapturada } from "@/lib/media/camara";
 
 import { previo, type PropsFase } from "./tipos";
 
@@ -52,14 +52,28 @@ type SesionEscaneo = {
   indiceOtro: number | null;
 };
 
-/** Fase · Documentos de entrada. */
-
+/**
+ * Fase · Documentos de entrada.
+ *
+ * Cada campo tiene dos acciones independientes:
+ *
+ *   Tomar foto   Siempre disponible. Guarda la foto como evidencia del
+ *                documento; el número se captura a mano.
+ *   Escanear     Solo con IA encendida y con créditos. Lee el número y
+ *                además guarda la foto.
+ *
+ * Las fotos salen SOLO de la cámara. No hay botón de galería: una imagen
+ * guardada en el teléfono puede ser de otro embarque o estar alterada, y la
+ * evidencia de un expediente C-TPAT tiene que tomarse en el momento.
+ */
 export function FaseDocumentos(
   props: PropsFase & {
     soloLectura?: boolean;
     latitud?: number | null;
     longitud?: number | null;
     fotosServidor?: { id: string; nombre: string; url: string }[];
+    /** La empresa tiene IA autorizada, encendida y con créditos. */
+    iaHabilitada?: boolean;
   }
 ) {
   const [factura, setFactura] = useState(() => previo(props.datosPrevios, "factura", ""));
@@ -71,15 +85,14 @@ export function FaseDocumentos(
   );
 
   const [sesion, setSesion] = useState<SesionEscaneo | null>(null);
-  const [camaraAbierta, setCamaraAbierta] = useState(false);
-  const [claveLeyendo, setClaveLeyendo] = useState<string | null>(null);
+  /** Qué cámara está abierta: la que lee con IA o la que solo fotografía. */
+  const [modoCamara, setModoCamara] = useState<"escanear" | "foto" | null>(null);
   const [errorLectura, setErrorLectura] = useState<string | null>(null);
-  const galeriaRef = useRef<HTMLInputElement>(null);
-  const sesionFoto = useRef<SesionEscaneo | null>(null);
   const [dudosos, setDudosos] = useState<string[]>([]);
   const [fotosDoc, setFotosDoc] = useState<FotoLocal[]>([]);
 
   const bloqueado = props.soloLectura ?? false;
+  const ia = props.iaHabilitada ?? false;
 
   useEffect(() => {
     let vivo = true;
@@ -93,17 +106,12 @@ export function FaseDocumentos(
     };
   }, [props.inspeccionId, props.clavePaso]);
 
-  async function archivarImagen(blob: Blob, etiqueta: string) {
-    const capturadaEn = new Date().toISOString();
-    const foto = await capturarDeArchivo(
-      blob,
-      {
-        capturadaEn,
-        latitud: props.latitud ?? null,
-        longitud: props.longitud ?? null,
-      },
-      etiqueta
-    );
+  /** Guarda una foto que ya trae los metadatos quemados. */
+  async function archivarCapturada(
+    foto: FotoCapturada,
+    capturadaEn: string,
+    etiqueta: string
+  ) {
     const guardada = await guardarFoto({
       clientId: crypto.randomUUID(),
       inspeccionId: props.inspeccionId,
@@ -119,6 +127,26 @@ export function FaseDocumentos(
       longitud: props.longitud ?? null,
     });
     setFotosDoc((prev) => [...prev, guardada]);
+  }
+
+  /** Fotograma crudo del escáner: se le queman los metadatos y se guarda. */
+  async function archivarImagen(blob: Blob, etiqueta: string) {
+    const capturadaEn = new Date().toISOString();
+    const foto = await capturarDeArchivo(
+      blob,
+      {
+        capturadaEn,
+        latitud: props.latitud ?? null,
+        longitud: props.longitud ?? null,
+      },
+      etiqueta
+    );
+    await archivarCapturada(foto, capturadaEn, etiqueta);
+  }
+
+  function cerrarCamara() {
+    setModoCamara(null);
+    setSesion(null);
   }
 
   function escribirCampo(activa: SesionEscaneo, datos: LecturaCampo) {
@@ -139,53 +167,18 @@ export function FaseDocumentos(
           : [...prev, activa.clave]
         : prev.filter((c) => c !== activa.clave)
     );
-    setCamaraAbierta(false);
-    setSesion(null);
+    cerrarCamara();
   }
 
-  function prepararEscaneo(activa: SesionEscaneo): boolean {
+  function abrirCamaraDe(activa: SesionEscaneo, modo: "escanear" | "foto") {
+    // Sin título no se sabe qué número buscar ni cómo nombrar la foto.
     if (activa.objetivo.campo === "otro" && !activa.objetivo.titulo.trim()) {
-      setErrorLectura("Escribe el título del documento antes de escanearlo.");
-      return false;
+      setErrorLectura("Escribe el título del documento antes de fotografiarlo.");
+      return;
     }
     setErrorLectura(null);
     setSesion(activa);
-    return true;
-  }
-
-  async function aplicarDesdeGaleria(archivo: File) {
-    const activa = sesionFoto.current;
-    if (!activa) return;
-    setClaveLeyendo(activa.clave);
-    setErrorLectura(null);
-    try {
-      let datosLeidos: LecturaCampo | null = null;
-      const r = await procesarImagenDocumento(archivo, activa.objetivo);
-      if (r.ok) datosLeidos = r.datos;
-      try {
-        await archivarImagen(archivo, textoObjetivo(activa.objetivo).etiqueta);
-      } catch {
-        setErrorLectura("La foto no se pudo guardar en el dispositivo.");
-      }
-      if (!r.ok) {
-        setErrorLectura(r.error);
-        return;
-      }
-      const valor = r.datos.valor?.trim();
-      if (!valor) {
-        setErrorLectura(
-          r.datos.problema ??
-            `No se encontró ${textoObjetivo(activa.objetivo).etiqueta} en la foto.`
-        );
-        return;
-      }
-      escribirCampo(activa, { ...datosLeidos!, valor });
-    } catch {
-      setErrorLectura("No se pudo procesar la imagen.");
-    } finally {
-      setClaveLeyendo(null);
-      sesionFoto.current = null;
-    }
+    setModoCamara(modo);
   }
 
   const marcaDudoso = (campo: string) =>
@@ -193,34 +186,21 @@ export function FaseDocumentos(
       ? "border-warn-500 focus:ring-warn-500/15"
       : undefined;
 
-  function abrirCamaraDe(activa: SesionEscaneo) {
-    if (!prepararEscaneo(activa)) return;
-    setCamaraAbierta(true);
-  }
-
-  function pedirFotoDe(activa: SesionEscaneo) {
-    if (!prepararEscaneo(activa)) return;
-    sesionFoto.current = activa;
-    galeriaRef.current?.click();
-  }
-
   function accionesDe(activa: SesionEscaneo) {
-    if (bloqueado) return null;
-    const leyendo = claveLeyendo === activa.clave;
+    // Con los datos bloqueados no hay nada que leer, pero la foto del
+    // documento sigue siendo evidencia útil.
+    const puedeEscanear = ia && !bloqueado;
     return (
-      <div className="mt-2 flex gap-2">
-        <Button size="sm" variant="secondary" disabled={leyendo} onClick={() => abrirCamaraDe(activa)}>
-          <ScanLine className="size-4" aria-hidden />
-          Escanear
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          loading={leyendo}
-          onClick={() => pedirFotoDe(activa)}
-        >
-          <ImageIcon className="size-4" aria-hidden />
-          Foto
+      <div className="mt-2 flex flex-wrap gap-2">
+        {puedeEscanear && (
+          <Button size="sm" variant="secondary" onClick={() => abrirCamaraDe(activa, "escanear")}>
+            <ScanLine className="size-4" aria-hidden />
+            Escanear con IA
+          </Button>
+        )}
+        <Button size="sm" variant="secondary" onClick={() => abrirCamaraDe(activa, "foto")}>
+          <Camera className="size-4" aria-hidden />
+          {puedeEscanear ? "Solo foto" : "Tomar foto"}
         </Button>
       </div>
     );
@@ -231,8 +211,10 @@ export function FaseDocumentos(
       {...props}
       descripcion={
         bloqueado
-          ? "Estos datos los precargó tu administrador. Solo puedes consultarlos."
-          : "Documentos que acompañan la carga. Escanea cada número desde su campo, o déjalo en blanco si no aplica."
+          ? "Estos datos los precargó tu administrador. Solo puedes consultarlos y fotografiar los documentos."
+          : ia
+            ? "Documentos que acompañan la carga. Escanea cada número con IA o toma la foto y captúralo a mano. Deja en blanco lo que no aplique."
+            : "Documentos que acompañan la carga. Toma la foto de cada documento y captura su número. Deja en blanco lo que no aplique."
       }
       recolectar={() => ({
         factura,
@@ -265,17 +247,6 @@ export function FaseDocumentos(
               ))}
           </div>
         )}
-        <input
-          ref={galeriaRef}
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          onChange={(e) => {
-            const archivo = e.target.files?.[0];
-            e.target.value = "";
-            if (archivo) void aplicarDesdeGaleria(archivo);
-          }}
-        />
         {errorLectura && (
           <p role="alert" className="flex items-start gap-2 text-sm text-danger-600">
             <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -410,17 +381,38 @@ export function FaseDocumentos(
         </div>
       </div>
 
-      {camaraAbierta && sesion && (
+      {modoCamara === "escanear" && sesion && (
         <EscanerDocumentos
           objetivo={sesion.objetivo}
           onExtraer={(datos) => escribirCampo(sesion, datos)}
           onImagen={(blob) => {
-            void archivarImagen(blob, textoObjetivo(sesion.objetivo).etiqueta);
+            void archivarImagen(blob, textoObjetivo(sesion.objetivo).etiqueta).catch(() =>
+              setErrorLectura("La foto no se pudo guardar en el dispositivo.")
+            );
           }}
-          onCerrar={() => {
-            setCamaraAbierta(false);
-            setSesion(null);
+          onCerrar={cerrarCamara}
+        />
+      )}
+
+      {modoCamara === "foto" && sesion && (
+        <CamaraPantallaCompleta
+          puntoNombre={textoObjetivo(sesion.objetivo).etiqueta}
+          latitud={props.latitud ?? null}
+          longitud={props.longitud ?? null}
+          onCapturar={async (foto, capturadaEn) => {
+            const etiqueta = textoObjetivo(sesion.objetivo).etiqueta;
+            try {
+              await archivarCapturada(foto, capturadaEn, etiqueta);
+            } catch (e) {
+              setErrorLectura(
+                e instanceof Error
+                  ? e.message
+                  : "La foto no se pudo guardar en el dispositivo."
+              );
+            }
+            cerrarCamara();
           }}
+          onCerrar={cerrarCamara}
         />
       )}
     </PantallaFase>
