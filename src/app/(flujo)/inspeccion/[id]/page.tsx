@@ -8,6 +8,7 @@ import { ProgressBar } from "@/components/inspection/progress-bar";
 import { StatusBadge } from "@/components/inspection/status-badge";
 import { PastillaCreditos } from "@/components/shell/creditos";
 import { Bitacora } from "@/components/inspection/bitacora";
+import { Responsables } from "@/components/inspection/responsables";
 import { PresenciaColectiva } from "@/components/inspection/colectiva";
 import { Card } from "@/components/ui/card";
 import { requerirSesion } from "@/lib/auth";
@@ -185,6 +186,8 @@ export default async function InspeccionPage({
         <div className="mt-7">
           <PhaseList flujo={flujo} inspeccionId={inspeccion.id} />
         </div>
+
+        <Responsables inspeccionId={inspeccion.id} />
 
         <Bitacora inspeccionId={inspeccion.id} />
       </main>

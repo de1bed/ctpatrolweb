@@ -23,6 +23,7 @@ import { BarraReporte } from "./barra";
 import { CompartirReporte } from "./compartir";
 import { RevocarQr } from "./revocar";
 import { Bitacora } from "@/components/inspection/bitacora";
+import { Responsables } from "@/components/inspection/responsables";
 import "./reporte.css";
 
 export const metadata: Metadata = { title: "Reporte" };
@@ -538,6 +539,7 @@ export default async function ReportePage({
               <RevocarQr inspeccionId={id} />
             </div>
           )}
+        <Responsables inspeccionId={id} />
         <Bitacora inspeccionId={id} />
       </div>
 

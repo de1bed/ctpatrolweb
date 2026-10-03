@@ -6,6 +6,7 @@ import { Ban, ExternalLink, ShieldAlert, ShieldCheck, Trash2, UserCog } from "lu
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
+import { EtiquetaColectiva } from "@/components/inspection/inspection-card";
 import { StatusBadge } from "@/components/inspection/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -38,6 +39,7 @@ export type InspeccionAdmin = {
   verification_token: string | null;
   verification_revoked_at: string | null;
   profiles: { id: string; full_name: string } | null;
+  is_collective?: boolean;
 };
 
 export function FilaInspeccion({
@@ -68,6 +70,7 @@ export function FilaInspeccion({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge estado={inspeccion.status} />
+            {inspeccion.is_collective && <EtiquetaColectiva />}
             {inspeccion.status === "completed" && inspeccion.passed !== null && (
               <span
                 className={cn(

@@ -40,7 +40,7 @@ export default async function AdminInspeccionesPage({
   let consulta = supabase
     .from("inspections")
     .select(
-      "id, display_id, status, customer_name, tractor_number, driver_name, updated_at, completed_at, scheduled_for, passed, findings_count, assigned_to, verification_token, verification_revoked_at, profiles!inspections_assigned_to_fkey(id, full_name)"
+      "id, display_id, status, customer_name, tractor_number, driver_name, updated_at, completed_at, scheduled_for, passed, findings_count, assigned_to, verification_token, verification_revoked_at, is_collective, profiles!inspections_assigned_to_fkey(id, full_name)"
     )
     .eq("company_account_id", sesion.companyAccountId)
     .order("updated_at", { ascending: false })

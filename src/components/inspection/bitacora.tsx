@@ -5,6 +5,7 @@ import { ScrollText } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { FASES_POR_ID } from "@/lib/inspection/fases";
 import { faseIdDeClave } from "@/lib/inspection/flujo";
+import { leerParticipantes } from "@/lib/inspecciones/colectiva";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -67,7 +68,7 @@ export async function Bitacora({ inspeccionId }: { inspeccionId: string }) {
   const { data } = await supabase
     .from("inspection_events")
     .select(
-      "id, event, payload, occurred_at, profiles!inspection_events_actor_id_fkey(full_name)"
+      "id, event, payload, occurred_at, actor_id, profiles!inspection_events_actor_id_fkey(full_name)"
     )
     .eq("inspection_id", inspeccionId)
     .order("occurred_at", { ascending: true })
@@ -78,10 +79,17 @@ export async function Bitacora({ inspeccionId }: { inspeccionId: string }) {
     event: string;
     payload: Json;
     occurred_at: string;
+    actor_id: string | null;
     profiles: { full_name: string } | null;
   };
   const eventos = (data ?? []) as unknown as Fila[];
   if (eventos.length === 0) return null;
+
+  // Un inspector no puede leer el perfil de sus compañeros: en una colectiva
+  // el nombre sale de los participantes de la inspección.
+  const sinNombre = eventos.some((e) => e.actor_id && !e.profiles?.full_name);
+  const participantes = sinNombre ? await leerParticipantes(supabase, inspeccionId) : null;
+  const nombres = new Map((participantes ?? []).map((p) => [p.perfilId, p.nombre]));
 
   return (
     <section className="mt-8">
@@ -92,7 +100,10 @@ export async function Bitacora({ inspeccionId }: { inspeccionId: string }) {
       <Card className="overflow-hidden">
         <ol className="divide-y divide-line">
           {eventos.map((e) => {
-            const actor = e.profiles?.full_name ?? "Sistema";
+            const actor =
+              e.profiles?.full_name ??
+              (e.actor_id ? nombres.get(e.actor_id) : undefined) ??
+              "Sistema";
             return (
               <li key={e.id} className="px-4 py-3">
                 <p className="text-sm font-medium text-ink">
