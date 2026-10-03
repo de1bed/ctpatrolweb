@@ -365,6 +365,7 @@ export type Database = {
         Row: {
           ai_analysis: Json | null
           ai_analyzed_at: string | null
+          captured_by: string | null
           captured_at: string
           client_id: string | null
           company_account_id: string
@@ -393,6 +394,7 @@ export type Database = {
         Insert: {
           ai_analysis?: Json | null
           ai_analyzed_at?: string | null
+          captured_by?: string | null
           captured_at: string
           client_id?: string | null
           company_account_id: string
@@ -421,6 +423,7 @@ export type Database = {
         Update: {
           ai_analysis?: Json | null
           ai_analyzed_at?: string | null
+          captured_by?: string | null
           captured_at?: string
           client_id?: string | null
           company_account_id?: string
@@ -463,6 +466,45 @@ export type Database = {
           },
         ]
       }
+      inspection_phase_locks: {
+        Row: {
+          heartbeat_at: string
+          holder_id: string
+          inspection_id: string
+          step_key: string
+          taken_at: string
+        }
+        Insert: {
+          heartbeat_at?: string
+          holder_id: string
+          inspection_id: string
+          step_key: string
+          taken_at?: string
+        }
+        Update: {
+          heartbeat_at?: string
+          holder_id?: string
+          inspection_id?: string
+          step_key?: string
+          taken_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_phase_locks_holder_id_fkey"
+            columns: ["holder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_phase_locks_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspections: {
         Row: {
           ai: Json
@@ -487,6 +529,7 @@ export type Database = {
           exit_status: Database["public"]["Enums"]["load_status"] | null
           findings_count: number
           id: string
+          is_collective: boolean
           is_full: boolean
           latitude: number | null
           location_accuracy: number | null
@@ -533,6 +576,7 @@ export type Database = {
           exit_status?: Database["public"]["Enums"]["load_status"] | null
           findings_count?: number
           id?: string
+          is_collective?: boolean
           is_full?: boolean
           latitude?: number | null
           location_accuracy?: number | null
@@ -579,6 +623,7 @@ export type Database = {
           exit_status?: Database["public"]["Enums"]["load_status"] | null
           findings_count?: number
           id?: string
+          is_collective?: boolean
           is_full?: boolean
           latitude?: number | null
           location_accuracy?: number | null
@@ -880,6 +925,18 @@ export type Database = {
       eliminar_inspeccion_empresa: {
         Args: { p_id: string }
         Returns: undefined
+      }
+      soltar_fase_inspeccion: {
+        Args: { p_id: string; p_paso?: string | null }
+        Returns: undefined
+      }
+      tomar_fase_inspeccion: {
+        Args: { p_id: string; p_paso: string }
+        Returns: {
+          ocupada: boolean
+          holder_id: string | null
+          holder_nombre: string | null
+        }[]
       }
       guardar_fase_inspeccion: {
         Args: {
