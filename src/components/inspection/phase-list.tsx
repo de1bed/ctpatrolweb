@@ -19,9 +19,12 @@ import { agruparPasos, puedeAbrir, type Flujo } from "@/lib/inspection/flujo";
 export function PhaseList({
   flujo,
   inspeccionId,
+  autores,
 }: {
   flujo: Flujo;
   inspeccionId: string;
+  /** Clave de paso → quién hizo el último cambio. Solo en colectivas. */
+  autores?: Record<string, string>;
 }) {
   const grupos = agruparPasos(flujo);
 
@@ -76,7 +79,9 @@ export function PhaseList({
                       {paso.titulo}
                     </p>
                     <p className="truncate text-sm text-ink-secondary">
-                      {paso.fase.descripcion}
+                      {paso.completado && autores?.[paso.clave]
+                        ? `Último cambio: ${autores[paso.clave]}`
+                        : paso.fase.descripcion}
                     </p>
                   </div>
 

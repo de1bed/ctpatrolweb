@@ -1,11 +1,13 @@
-import { ChevronRight, ShieldAlert, ShieldCheck, Users } from "lucide-react";
+import { ChevronRight, Crown, ShieldAlert, ShieldCheck, Users } from "lucide-react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
-import { fechaEnLista } from "@/lib/calendario";
+import { FechaEnLista } from "@/components/ui/fecha-en-lista";
 import { cn } from "@/lib/cn";
+import type { EquipoTarjeta } from "@/lib/inspecciones/colectiva";
 import type { Database } from "@/lib/supabase/database.types";
 
+import { PastillaEnVivo } from "./equipo";
 import { StatusBadge } from "./status-badge";
 
 export type InspeccionResumen = {
@@ -42,19 +44,24 @@ export function EtiquetaColectiva() {
 export function InspectionCard({
   inspeccion,
   mostrarResultado = false,
+  equipo,
 }: {
   inspeccion: InspeccionResumen;
   mostrarResultado?: boolean;
+  /** Colectivas: encargado, quiénes se unieron y si está en vivo. */
+  equipo?: EquipoTarjeta;
 }) {
   const fecha = inspeccion.completed_at ?? inspeccion.updated_at;
   const cerrada = inspeccion.status === "completed";
+  const abierta = !cerrada && inspeccion.status !== "cancelled";
+  const enVivo = Boolean(abierta && equipo?.enVivo);
 
   return (
     <Link href={`/inspeccion/${inspeccion.id}`} className="block">
       <Card interactive className="flex items-center gap-3 p-4 hover:border-line-strong">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge estado={inspeccion.status} />
+            {enVivo ? <PastillaEnVivo /> : <StatusBadge estado={inspeccion.status} />}
 
             {inspeccion.is_collective && <EtiquetaColectiva />}
 
@@ -87,8 +94,29 @@ export function InspectionCard({
             {inspeccion.tractor_number && ` · ${inspeccion.tractor_number}`}
           </p>
 
+          {equipo && (
+            <div className="mt-2 flex flex-col gap-0.5 text-sm">
+              <p className="flex items-center gap-1.5 truncate text-ink">
+                <Crown className="size-3.5 shrink-0 text-brand-600" aria-hidden />
+                <span className="text-ink-muted">Encargado:</span>
+                <span className="truncate font-semibold">
+                  {equipo.encargado ?? "quien la empiece"}
+                </span>
+              </p>
+              {equipo.unidos.length > 0 && (
+                <p className="flex items-center gap-1.5 text-ink-secondary">
+                  <Users className="size-3.5 shrink-0 text-ink-muted" aria-hidden />
+                  <span className="truncate">
+                    {equipo.unidos.length === 1 ? "Se unió" : `Se unieron ${equipo.unidos.length}`}:{" "}
+                    {equipo.unidos.join(", ")}
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
+
           <p className="mt-1 text-xs text-ink-muted">
-            {fechaEnLista(fecha)}
+            <FechaEnLista iso={fecha} />
             {mostrarResultado &&
               (inspeccion.findings_count ?? 0) > 0 &&
               ` · ${inspeccion.findings_count} ${

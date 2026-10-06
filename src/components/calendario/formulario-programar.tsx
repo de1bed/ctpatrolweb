@@ -117,10 +117,10 @@ export function FormularioProgramar({
           />
 
           <Field
-            label={colectiva ? "Responsable (opcional)" : "Asignar a"}
+            label={colectiva ? "Encargado (opcional)" : "Asignar a"}
             hint={
               colectiva
-                ? "Le aparece a todo el equipo aunque no tenga responsable."
+                ? "El encargado es quien cierra la inspección: en su teléfono firman todos. Si lo dejas vacío, el encargado será quien la empiece."
                 : "Si la dejas sin asignar, no aparece en el calendario del inspector."
             }
           >

@@ -1,5 +1,3 @@
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -16,6 +14,10 @@ import { calcularResultado } from "@/lib/inspection/resultado";
 import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
 import { capacidadesDe } from "@/lib/inspection/transporte";
 import { createClient } from "@/lib/supabase/server";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { formatoEnZona } from "@/lib/zona";
+import { zonaDelUsuario } from "@/lib/zona-servidor";
 import { clientEnv, isResendConfigured } from "@/lib/env";
 import QRCode from "qrcode";
 
@@ -23,6 +25,8 @@ import { BarraReporte } from "./barra";
 import { CompartirReporte } from "./compartir";
 import { RevocarQr } from "./revocar";
 import { Bitacora } from "@/components/inspection/bitacora";
+import { leerAutoriaPunto } from "@/lib/inspection/autoria";
+import { leerEquipo, nombresDePerfiles } from "@/lib/inspecciones/colectiva";
 import { Responsables } from "@/components/inspection/responsables";
 import "./reporte.css";
 
@@ -62,7 +66,7 @@ export default async function ReportePage({
 
   const { data: evidencia } = await supabase
     .from("inspection_media")
-    .select("id, kind, phase, point_key, point_label, storage_path, captured_at, latitude, longitude, duration_seconds")
+    .select("id, kind, phase, point_key, point_label, storage_path, captured_at, latitude, longitude, duration_seconds, captured_by")
     .eq("inspection_id", id)
     .not("storage_path", "is", null)
     .order("phase")
@@ -114,8 +118,11 @@ export default async function ReportePage({
   const resultado = calcularResultado(inspeccion.data);
   const capacidades = capacidadesDe(inspeccion.transport_type);
 
+  // El servidor corre en UTC: todas las horas del reporte se escriben en la
+  // zona de quien lo abre, igual que la hora impresa en cada foto.
+  const tz = await zonaDelUsuario();
   const fechaTexto = (iso: string | null) =>
-    iso ? format(new Date(iso), "d MMM yyyy, HH:mm", { locale: es }) : "—";
+    iso ? formatoEnZona(iso, "d MMM yyyy, HH:mm", tz) : "—";
 
   // Fases visuales que tienen puntos capturados.
   const fasesVisuales = flujo.pasos.filter((p) => p.fase.puntos);
@@ -147,6 +154,24 @@ export default async function ReportePage({
     .maybeSingle();
 
   const destinosCopia = [...new Set([sesion.email, ...(perfil?.report_emails ?? [])])];
+
+  // ── Quién hizo qué ─────────────────────────────────────────────────────
+  // Colectiva: encargado y participantes en los datos generales, y quién
+  // tomó cada foto en su pie. Si no se puede leer, el reporte sale igual.
+  const equipo = inspeccion.is_collective
+    ? await leerEquipo(supabase, inspeccion, sesion.companyAccountId)
+    : null;
+  const nombreDe = new Map((equipo?.personas ?? []).map((p) => [p.perfilId, p.nombre]));
+  if (equipo) {
+    const faltan = todaLaEvidencia
+      .map((m) => m.captured_by)
+      .filter((x): x is string => Boolean(x) && !nombreDe.has(x!));
+    for (const [k, v] of await nombresDePerfiles(faltan, sesion.companyAccountId)) {
+      nombreDe.set(k, v);
+    }
+  }
+  const tomoFoto = (m: { captured_by: string | null }) =>
+    equipo && m.captured_by ? (nombreDe.get(m.captured_by) ?? null) : null;
 
   const firmas = datos["firmas"] as
     | {
@@ -218,7 +243,7 @@ export default async function ReportePage({
             </div>
             <div>
               <dt>Entrada de la unidad</dt>
-              <dd>{fechaTexto(inspeccion.entered_at)}</dd>
+              <dd>{entradaTexto(datos["configuracion"]?.horaEntrada) ?? fechaTexto(inspeccion.entered_at)}</dd>
             </div>
             <div>
               <dt>Inicio / término</dt>
@@ -226,6 +251,26 @@ export default async function ReportePage({
                 {fechaTexto(inspeccion.started_at)} — {fechaTexto(inspeccion.completed_at)}
               </dd>
             </div>
+            {equipo && (
+              <>
+                <div>
+                  <dt>Encargado</dt>
+                  <dd>{equipo.encargado?.nombre ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Inició</dt>
+                  <dd>{equipo.inicio?.nombre ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Se unieron</dt>
+                  <dd>
+                    {equipo.unidos.length > 0
+                      ? equipo.unidos.map((p) => p.nombre).join(", ")
+                      : "Nadie más"}
+                  </dd>
+                </div>
+              </>
+            )}
             <div>
               <dt>Ubicación GPS</dt>
               <dd>
@@ -272,6 +317,11 @@ export default async function ReportePage({
             PuntoGuardado
           >;
           if (Object.keys(guardados).length === 0) return null;
+          // Solo en colectivas: en una individual todo lo hizo el mismo
+          // inspector y la columna repetiría su nombre 41 veces.
+          const conAutoria =
+            inspeccion.is_collective &&
+            Object.values(guardados).some((g) => leerAutoriaPunto(g));
 
           return (
             <section key={paso.clave}>
@@ -280,9 +330,10 @@ export default async function ReportePage({
                 <thead>
                   <tr>
                     <th style={{ width: "5%" }}>#</th>
-                    <th style={{ width: "35%" }}>Punto</th>
+                    <th style={{ width: conAutoria ? "28%" : "35%" }}>Punto</th>
                     <th style={{ width: "15%" }}>Resultado</th>
                     <th>Observaciones</th>
+                    {conAutoria && <th style={{ width: "20%" }}>Último cambio</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -302,6 +353,24 @@ export default async function ReportePage({
                           {calif.charAt(0).toUpperCase() + calif.slice(1)}
                         </td>
                         <td>{g.nota || "—"}</td>
+                        {conAutoria && (
+                          <td>
+                            {(() => {
+                              const a = leerAutoriaPunto(g);
+                              return a ? (
+                                <>
+                                  {a.editadoPorNombre || "—"}
+                                  <br />
+                                  <span style={{ fontSize: "8.5pt", color: "#4b5563" }}>
+                                    {formatoEnZona(a.editadoEn, "d MMM, HH:mm", tz)}
+                                  </span>
+                                </>
+                              ) : (
+                                "—"
+                              );
+                            })()}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -316,6 +385,7 @@ export default async function ReportePage({
           datos={datos["documentos"]}
           fotos={fotosDocumento}
           urlPorRuta={urlPorRuta}
+          tz={tz}
         />
 
         {/* ── Conductor y unidad: licencia y placas ───────────────────── */}
@@ -328,6 +398,7 @@ export default async function ReportePage({
             .map((p) => ({ clave: p.clave, titulo: p.titulo }))}
           fotos={fotosIdentificacion}
           urlPorRuta={urlPorRuta}
+          tz={tz}
         />
 
         {/* ── Evidencia fotográfica ───────────────────────────────────── */}
@@ -365,7 +436,13 @@ export default async function ReportePage({
                       <figcaption>
                         <strong>{foto.point_label ?? foto.point_key}</strong>
                         <br />
-                        {format(new Date(foto.captured_at), "dd/MM/yyyy HH:mm:ss")}
+                        {formatoEnZona(foto.captured_at, "dd/MM/yyyy HH:mm:ss", tz)}
+                        {tomoFoto(foto) && (
+                          <>
+                            <br />
+                            Tomó: {tomoFoto(foto)}
+                          </>
+                        )}
                         {foto.latitude != null && foto.longitude != null && (
                           <>
                             <br />
@@ -402,7 +479,7 @@ export default async function ReportePage({
                     <td>{v.point_label ?? v.point_key}</td>
                     <td>{v.duration_seconds ? `${v.duration_seconds} s` : "—"}</td>
                     <td>
-                      {format(new Date(v.captured_at), "dd/MM/yyyy HH:mm:ss")}
+                      {formatoEnZona(v.captured_at, "dd/MM/yyyy HH:mm:ss", tz)}
                       {v.latitude != null &&
                         v.longitude != null &&
                         ` · ${v.latitude.toFixed(5)}, ${v.longitude.toFixed(5)}`}
@@ -524,7 +601,7 @@ export default async function ReportePage({
 
         <footer className="reporte__pie">
           Documento generado por CTPatrol el{" "}
-          {format(new Date(), "d 'de' MMMM 'de' yyyy, HH:mm", { locale: es })}.
+          {formatoEnZona(new Date(), "d 'de' MMMM 'de' yyyy, HH:mm", tz)}.
           Folio {inspeccion.display_id}. Las fotografías incluyen fecha, hora y
           coordenadas impresas en la propia imagen.
         </footer>
@@ -562,6 +639,7 @@ function DocumentosReporte({
   datos,
   fotos,
   urlPorRuta,
+  tz,
 }: {
   datos: Record<string, unknown> | undefined;
   fotos: {
@@ -574,6 +652,7 @@ function DocumentosReporte({
     longitude: number | null;
   }[];
   urlPorRuta: Map<string, string>;
+  tz: string;
 }) {
   const factura = textoDe(datos?.factura);
   const bl = textoDe(datos?.billOfLading);
@@ -636,7 +715,7 @@ function DocumentosReporte({
                   <figcaption>
                     <strong>{foto.point_label ?? foto.point_key ?? "Documento"}</strong>
                     <br />
-                    {format(new Date(foto.captured_at), "dd/MM/yyyy HH:mm:ss")}
+                    {formatoEnZona(foto.captured_at, "dd/MM/yyyy HH:mm:ss", tz)}
                     {foto.latitude != null && foto.longitude != null && (
                       <>
                         <br />
@@ -680,6 +759,7 @@ function IdentificacionReporte({
   pasosRemolque,
   fotos,
   urlPorRuta,
+  tz,
 }: {
   datos: Record<string, Record<string, unknown>>;
   conductorColumna: string | null;
@@ -687,6 +767,7 @@ function IdentificacionReporte({
   pasosRemolque: { clave: string; titulo: string }[];
   fotos: FotoReporte[];
   urlPorRuta: Map<string, string>;
+  tz: string;
 }) {
   const conductor = datos["conductor"];
   const tractor = datos["tractor"];
@@ -795,7 +876,7 @@ function IdentificacionReporte({
                   <figcaption>
                     <strong>{titulo}</strong>
                     <br />
-                    {format(new Date(foto.captured_at), "dd/MM/yyyy HH:mm:ss")}
+                    {formatoEnZona(foto.captured_at, "dd/MM/yyyy HH:mm:ss", tz)}
                     {foto.latitude != null && foto.longitude != null && (
                       <>
                         <br />
@@ -811,6 +892,19 @@ function IdentificacionReporte({
       )}
     </section>
   );
+}
+
+/**
+ * La hora de entrada tal como la tecleó el inspector, en su reloj. Es la
+ * fuente fiel: la columna `entered_at` de inspecciones anteriores al
+ * 2026-10-05 quedó guardada como si esa hora fuera UTC.
+ */
+function entradaTexto(valor: unknown): string | null {
+  if (typeof valor !== "string") return null;
+  const m = valor.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, y, mes, d, h, mi] = m.map(Number);
+  return format(new Date(y, mes - 1, d, h, mi), "d MMM yyyy, HH:mm", { locale: es });
 }
 
 function textoDe(valor: unknown): string {

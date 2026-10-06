@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 
 import { Card } from "@/components/ui/card";
 import { requerirAdmin } from "@/lib/auth";
+import { zonaDelUsuario } from "@/lib/zona-servidor";
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
@@ -30,6 +31,7 @@ export default async function AdminInspeccionesPage({
   searchParams,
 }: PageProps<"/admin/inspecciones">) {
   const sesion = await requerirAdmin();
+  const tz = await zonaDelUsuario();
   const params = await searchParams;
 
   const estado = typeof params.estado === "string" ? params.estado : "abiertas";
@@ -160,7 +162,7 @@ export default async function AdminInspeccionesPage({
         <ul className="flex flex-col gap-2.5">
           {inspecciones.map((i) => (
             <li key={i.id}>
-              <FilaInspeccion inspeccion={i} inspectores={listaInspectores} />
+              <FilaInspeccion inspeccion={i} inspectores={listaInspectores} tz={tz} />
             </li>
           ))}
         </ul>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, PenLine, Users } from "lucide-react";
+import { ArrowLeft, Crown, PenLine, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -87,7 +87,9 @@ function AvisoFirmas({ estado, enFirmas }: { estado: EstadoColectiva; enFirmas: 
       <div className="mx-auto flex max-w-3xl items-start gap-3">
         <PenLine className="mt-0.5 size-6 shrink-0" aria-hidden />
         <p>
-          <strong className="block text-base">{nombre} está cerrando la inspección.</strong>
+          <strong className="block text-base">
+            {nombre}, el encargado, está cerrando la inspección.
+          </strong>
           <span className="text-sm text-white/90">
             Ve a su teléfono a firmar. Todos los que participaron firman ahí.
           </span>
@@ -241,5 +243,46 @@ export function PresenciaColectiva({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Lo que ve en Firmas quien no es el encargado de una colectiva.
+ *
+ * La firma final se hace en un solo teléfono, el del encargado, para que no
+ * cualquiera pueda dar por terminada una inspección en la que trabajaron
+ * varios. Aquí no se captura nada.
+ */
+export function FirmasSoloEncargado({
+  inspeccionId,
+  encargado,
+}: {
+  inspeccionId: string;
+  encargado: string;
+}) {
+  return (
+    <main className="mx-auto flex min-h-dvh max-w-sm flex-col items-center justify-center gap-3 px-gutter text-center">
+      <span className="flex size-16 items-center justify-center rounded-2xl bg-brand-50 dark:bg-brand-950">
+        <Crown className="size-8 text-brand-600" aria-hidden />
+      </span>
+      <h1 className="text-lg font-bold text-ink">
+        La firma final se hace en el teléfono de {encargado}
+      </h1>
+      <p className="text-sm text-ink-secondary">
+        {encargado} es el encargado de esta inspección y es quien la cierra. Cuando
+        entre a Firmas te va a aparecer un aviso: ve a su teléfono a firmar.
+      </p>
+      <p className="text-sm text-ink-muted">
+        Si el encargado no puede cerrarla, un administrador puede cambiarlo desde
+        el panel.
+      </p>
+      <Link
+        href={`/inspeccion/${inspeccionId}`}
+        className="mt-2 inline-flex min-h-12 items-center gap-2 rounded-xl bg-brand-600 px-5 font-semibold text-white"
+      >
+        <ArrowLeft className="size-5" aria-hidden />
+        Volver a la inspección
+      </Link>
+    </main>
   );
 }

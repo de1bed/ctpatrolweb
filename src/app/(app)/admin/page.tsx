@@ -12,12 +12,14 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { InspectionCard } from "@/components/inspection/inspection-card";
+import { equiposParaTarjetas } from "@/lib/inspecciones/colectiva";
 import { Card } from "@/components/ui/card";
 
 import { MetricasAdmin, type Cierre } from "./metricas";
 import { requerirAdmin } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/server";
+import { zonaDelUsuario } from "@/lib/zona-servidor";
 
 export const metadata: Metadata = { title: "Administración" };
 
@@ -88,7 +90,7 @@ export default async function AdminResumenPage() {
     supabase
       .from("inspections")
       .select(
-        "id, display_id, status, customer_name, tractor_number, updated_at, completed_at, passed, findings_count"
+        "id, display_id, status, customer_name, tractor_number, updated_at, completed_at, passed, findings_count, is_collective, assigned_to"
       )
       .eq("company_account_id", empresa)
       .order("updated_at", { ascending: false })
@@ -111,6 +113,8 @@ export default async function AdminResumenPage() {
     ? await supabase.from("profiles").select("id, full_name").eq("company_account_id", empresa).in("id", idsInspectores)
     : { data: [] };
   const nombres = new Map((perfiles ?? []).map((p) => [p.id, p.full_name]));
+
+  const equipos = await equiposParaTarjetas(supabase, recientes, empresa);
 
   const tasaRechazo =
     completadasMes > 0 ? Math.round((rechazadasMes / completadasMes) * 100) : 0;
@@ -252,7 +256,7 @@ export default async function AdminResumenPage() {
         </Card>
       </div>
 
-      <MetricasAdmin cierres={cierresMes} nombres={nombres} />
+      <MetricasAdmin cierres={cierresMes} nombres={nombres} tz={await zonaDelUsuario()} />
 
       {/* ── Actividad reciente ─────────────────────────────────────────── */}
       <section className="mt-8">
@@ -284,7 +288,7 @@ export default async function AdminResumenPage() {
           <ul className="grid gap-3 sm:grid-cols-2">
             {recientes.map((i) => (
               <li key={i.id}>
-                <InspectionCard inspeccion={i} mostrarResultado />
+                <InspectionCard inspeccion={i} mostrarResultado equipo={equipos[i.id]} />
               </li>
             ))}
           </ul>

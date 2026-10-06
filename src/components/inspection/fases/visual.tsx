@@ -1,13 +1,15 @@
 "use client";
 
-import { BookOpen, Camera, Check, RotateCcw, TriangleAlert } from "lucide-react";
+import { BookOpen, Camera, Check, History, RotateCcw, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AnalisisIA } from "@/components/inspection/ai-analysis";
 import { CamaraPantallaCompleta } from "@/components/inspection/camera";
 import { GuideSheet } from "@/components/inspection/guide-sheet";
 import { PantallaFase } from "@/components/inspection/phase-shell";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { HoraLocal } from "@/components/ui/hora-local";
 import { Field, Textarea } from "@/components/ui/field";
 import { OptionCards } from "@/components/ui/option-cards";
 import { cn } from "@/lib/cn";
@@ -17,6 +19,7 @@ import {
   type GrupoPuntos,
   type PuntoInspeccion,
 } from "@/lib/inspection/puntos";
+import { CLAVE_TOCADOS, leerAutoriaPunto, type AutoriaPunto } from "@/lib/inspection/autoria";
 import { guiaDe } from "@/lib/inspection/guias";
 import {
   borrarFoto,
@@ -110,6 +113,42 @@ export function FaseVisual(
   const [guiaAbierta, setGuiaAbierta] = useState<string | null>(null);
   const [errorFoto, setErrorFoto] = useState<string | null>(null);
 
+  // ── Autoría por punto ───────────────────────────────────────────────────
+  // Quién dejó cada punto como está. Si fue otra persona, antes de cambiarlo
+  // se pide confirmación: el cambio queda a nombre de quien lo hace.
+  const yoId = props.contexto.yoId;
+  const autoriaPuntos = useMemo(() => {
+    const guardados = previo<Record<string, unknown>>(props.datosPrevios, "puntos", {});
+    const mapa: Record<string, AutoriaPunto> = {};
+    for (const [clave, valor] of Object.entries(guardados)) {
+      const a = leerAutoriaPunto(valor);
+      if (a) mapa[clave] = a;
+    }
+    return mapa;
+  }, [props.datosPrevios]);
+  const [confirmados, setConfirmados] = useState<string[]>([]);
+  const [porConfirmar, setPorConfirmar] = useState<{
+    clave: string;
+    accion: () => void;
+  } | null>(null);
+  // Puntos con foto nueva en esta visita: el servidor los cuenta como
+  // cambio aunque la calificación quede igual.
+  const [tocados, setTocados] = useState<string[]>([]);
+
+  function ajeno(clave: string): AutoriaPunto | null {
+    const a = autoriaPuntos[clave];
+    return a && yoId && a.editadoPor !== yoId ? a : null;
+  }
+
+  /** Corre la acción, o pide confirmarla si el punto lo dejó otra persona. */
+  function conConfirmacion(clave: string, accion: () => void) {
+    if (ajeno(clave) && !confirmados.includes(clave)) {
+      setPorConfirmar({ clave, accion });
+      return;
+    }
+    accion();
+  }
+
   // ── Fotos ya guardadas de este paso ─────────────────────────────────────
   useEffect(() => {
     let vivo = true;
@@ -199,6 +238,7 @@ export function FaseVisual(
       });
 
       setFotos((prev) => ({ ...prev, [punto.clave]: guardada }));
+      setTocados((prev) => (prev.includes(punto.clave) ? prev : [...prev, punto.clave]));
       setCapturando(null);
     } catch (e) {
       setErrorFoto(
@@ -298,6 +338,7 @@ export function FaseVisual(
           ),
           escalamiento: hallazgos > 0 ? escalamiento : "ninguno",
           escalamientoNota,
+          [CLAVE_TOCADOS]: tocados,
         })}
       >
         {errorFoto && (
@@ -354,7 +395,9 @@ export function FaseVisual(
                     {/* Miniatura o botón de captura */}
                     <button
                       type="button"
-                      onClick={() => setCapturando(punto.clave)}
+                      onClick={() =>
+                        conConfirmacion(punto.clave, () => setCapturando(punto.clave))
+                      }
                       disabled={estado.noAplica}
                       aria-label={
                         urlFoto
@@ -409,6 +452,31 @@ export function FaseVisual(
                         {punto.pista}
                       </p>
 
+                      {/* Último cambio del punto: en una colectiva siempre, en
+                          una individual solo si lo cambió alguien más. */}
+                      {autoriaPuntos[punto.clave] &&
+                        (props.contexto.colectiva || ajeno(punto.clave)) && (
+                          <p
+                            className={cn(
+                              "mt-1 flex items-center gap-1.5 text-xs",
+                              ajeno(punto.clave)
+                                ? "text-warn-700 dark:text-warn-500"
+                                : "text-ink-muted"
+                            )}
+                          >
+                            <History className="size-3.5 shrink-0" aria-hidden />
+                            <span>
+                              Último cambio:{" "}
+                              <strong className="font-semibold">
+                                {ajeno(punto.clave)
+                                  ? autoriaPuntos[punto.clave].editadoPorNombre || "otra persona"
+                                  : "tú"}
+                              </strong>{" "}
+                              · <HoraLocal iso={autoriaPuntos[punto.clave].editadoEn} />
+                            </span>
+                          </p>
+                        )}
+
                       {/* Acceso a la guía. Va junto a la pista y no escondido
                           en un menú: es lo que consulta un inspector nuevo, y
                           esconderlo equivale a no tenerlo. */}
@@ -431,7 +499,9 @@ export function FaseVisual(
                               key={b.valor}
                               type="button"
                               onClick={() =>
-                                actualizar(punto.clave, { calificacion: b.valor })
+                                conConfirmacion(punto.clave, () =>
+                                  actualizar(punto.clave, { calificacion: b.valor })
+                                )
                               }
                               aria-pressed={estado.calificacion === b.valor}
                               className={cn(
@@ -450,10 +520,12 @@ export function FaseVisual(
                       <button
                         type="button"
                         onClick={() =>
-                          actualizar(punto.clave, {
-                            noAplica: !estado.noAplica,
-                            calificacion: null,
-                          })
+                          conConfirmacion(punto.clave, () =>
+                            actualizar(punto.clave, {
+                              noAplica: !estado.noAplica,
+                              calificacion: null,
+                            })
+                          )
                         }
                         className="mt-2 text-sm font-medium text-ink-muted underline underline-offset-2"
                       >
@@ -508,9 +580,12 @@ export function FaseVisual(
                         <Textarea
                           rows={2}
                           value={estado.nota}
-                          onChange={(e) =>
-                            actualizar(punto.clave, { nota: e.target.value })
-                          }
+                          onChange={(e) => {
+                            const nota = e.target.value;
+                            conConfirmacion(punto.clave, () =>
+                              actualizar(punto.clave, { nota })
+                            );
+                          }}
                           placeholder="Qué se observó en este punto"
                         />
                       </div>
@@ -561,6 +636,48 @@ export function FaseVisual(
           guia={guiaDe(guiaAbierta)!}
           onCerrar={() => setGuiaAbierta(null)}
         />
+      )}
+
+      {porConfirmar && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="confirmar-ajeno"
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-gutter sm:items-center"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-xl">
+            <div className="flex items-start gap-3">
+              <TriangleAlert className="mt-0.5 size-6 shrink-0 text-warn-600" aria-hidden />
+              <div>
+                <h2 id="confirmar-ajeno" className="font-bold text-ink">
+                  Este punto lo capturó{" "}
+                  {autoriaPuntos[porConfirmar.clave]?.editadoPorNombre || "otra persona"}
+                </h2>
+                <p className="mt-1 text-sm text-ink-secondary">
+                  {puntos.find((p) => p.clave === porConfirmar.clave)?.nombre} · último
+                  cambio <HoraLocal iso={autoriaPuntos[porConfirmar.clave]?.editadoEn ?? ""} />.
+                  Si lo modificas, el cambio quedará a tu nombre y se registrará en la
+                  bitácora con lo que tenía antes.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setPorConfirmar(null)}>
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  setConfirmados((prev) => [...prev, porConfirmar.clave]);
+                  porConfirmar.accion();
+                  setPorConfirmar(null);
+                }}
+              >
+                Sí, modificar
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {puntoActivo && (

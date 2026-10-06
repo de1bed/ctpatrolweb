@@ -5,6 +5,18 @@ import type { TablesUpdate } from "@/lib/supabase/database.types";
 import type { FaseId } from "./fases";
 import { TIPOS_TRANSPORTE } from "./transporte";
 import { CALIFICACIONES } from "./puntos";
+import { desdeZona } from "../zona";
+
+/**
+ * Hora de un input datetime-local ("yyyy-MM-ddTHH:mm") al instante real, en
+ * la zona de quien la tecleó. Sin zona conocida, como antes.
+ */
+export function horaLocalAInstante(valor: string, tz?: string): string {
+  const m = valor.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m || !tz) return new Date(valor).toISOString();
+  const [, y, mes, d, h, mi] = m.map(Number);
+  return desdeZona(new Date(y, mes - 1, d, h, mi), tz).toISOString();
+}
 
 /**
  * Qué se guarda en cada fase, y dónde.
@@ -297,7 +309,11 @@ export const ESQUEMAS: Record<FaseId, z.ZodTypeAny> = {
 
 // ── Proyección a columnas ────────────────────────────────────────────────────
 
-type Proyeccion = (datos: Record<string, unknown>) => TablesUpdate<"inspections">;
+type Proyeccion = (
+  datos: Record<string, unknown>,
+  /** Zona horaria de quien guarda: las horas tecleadas son hora local. */
+  ctx?: { tz?: string }
+) => TablesUpdate<"inspections">;
 
 /**
  * Cada entrada dice qué columnas de `inspections` toca esta fase.
@@ -307,8 +323,10 @@ type Proyeccion = (datos: Record<string, unknown>) => TablesUpdate<"inspections"
  * por ello en el panel.
  */
 export const PROYECCIONES: Partial<Record<FaseId, Proyeccion>> = {
-  configuracion: (d) => ({
-    entered_at: new Date(String(d.horaEntrada)).toISOString(),
+  configuracion: (d, ctx) => ({
+    // "2026-10-05T21:40" es la hora que vio el inspector en SU reloj. Leerla
+    // con la zona del servidor (UTC) la guardaba siete horas corrida.
+    entered_at: horaLocalAInstante(String(d.horaEntrada), ctx?.tz),
     latitude: (d.latitud as number | null) ?? null,
     longitude: (d.longitud as number | null) ?? null,
     location_accuracy: (d.precision as number | null) ?? null,

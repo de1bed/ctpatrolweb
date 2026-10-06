@@ -13,16 +13,26 @@ import {
 } from "date-fns";
 import { es } from "date-fns/locale";
 
+import { aZona, desdeZona } from "./zona";
+
 /** Semana que empieza en lunes: es como se trabaja el patio. */
 const SEMANA = { weekStartsOn: 1 as const };
 
-export function mesDesdeParam(valor: string | undefined): Date {
+export function mesDesdeParam(valor: string | undefined, tz?: string): Date {
   if (valor && /^\d{4}-\d{2}$/.test(valor)) {
     const [y, m] = valor.split("-").map(Number);
     return new Date(y, m - 1, 1);
   }
-  const hoy = new Date();
+  const hoy = hoyEn(tz);
   return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+}
+
+/**
+ * "Ahora" como hora de pared en la zona del usuario. Sin zona, la del
+ * proceso (sirve en el navegador, no en el servidor, que corre en UTC).
+ */
+export function hoyEn(tz?: string): Date {
+  return tz ? aZona(new Date(), tz) : new Date();
 }
 
 export function claveMes(fecha: Date): string {
@@ -57,6 +67,15 @@ export function rangoVisible(mes: Date): { desde: Date; hasta: Date } {
   return { desde, hasta };
 }
 
+/**
+ * El mismo rango, como instantes reales para consultar la base: el lunes a
+ * las 00:00 en la zona del usuario, no en la del servidor.
+ */
+export function rangoConsulta(mes: Date, tz: string): { desde: Date; hasta: Date } {
+  const { desde, hasta } = rangoVisible(mes);
+  return { desde: desdeZona(desde, tz), hasta: desdeZona(hasta, tz) };
+}
+
 export function diasDelCalendario(mes: Date): Date[] {
   const { desde, hasta } = rangoVisible(mes);
   return eachDayOfInterval({ start: desde, end: addDays(hasta, -1) });
@@ -89,12 +108,12 @@ const COLORES = [
 /** Hasta aquí “hace 2 días” se entiende. Después, la fecha. */
 const DIAS_RELATIVO = 7;
 
-export function fechaEnLista(iso: string): string {
+export function fechaEnLista(iso: string, tz?: string): string {
   const fecha = new Date(iso);
   if (differenceInDays(new Date(), fecha) < DIAS_RELATIVO) {
     return formatDistanceToNow(fecha, { addSuffix: true, locale: es });
   }
-  return format(fecha, "d MMM yyyy, HH:mm", { locale: es });
+  return format(tz ? aZona(fecha, tz) : fecha, "d MMM yyyy, HH:mm", { locale: es });
 }
 
 export function colorPorId(id: string | null): string {

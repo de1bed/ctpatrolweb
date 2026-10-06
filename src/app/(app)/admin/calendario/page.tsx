@@ -14,10 +14,13 @@ import {
   colorPorId,
   inicioTurno,
   mesDesdeParam,
-  rangoVisible,
+  hoyEn,
+  rangoConsulta,
 } from "@/lib/calendario";
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/server";
+import { aZona } from "@/lib/zona";
+import { zonaDelUsuario } from "@/lib/zona-servidor";
 
 import { BotonProgramar } from "./boton-programar";
 
@@ -39,17 +42,18 @@ export default async function AdminCalendarioPage({
   const sesion = await requerirAdmin();
   const params = await searchParams;
 
-  const mes = mesDesdeParam(valorParam(params, "mes") || undefined);
+  const tz = await zonaDelUsuario();
+  const mes = mesDesdeParam(valorParam(params, "mes") || undefined, tz);
   const inspectorFiltro = valorParam(params, "inspector");
   const diaParam = valorParam(params, "dia");
-  const hoy = claveDia(new Date());
+  const hoy = claveDia(hoyEn(tz));
   const diaActivo = /^\d{4}-\d{2}-\d{2}$/.test(diaParam)
     ? diaParam
-    : claveMes(mes) === claveMes(new Date())
+    : claveMes(mes) === claveMes(hoyEn(tz))
       ? hoy
       : `${claveMes(mes)}-01`;
 
-  const { desde, hasta } = rangoVisible(mes);
+  const { desde, hasta } = rangoConsulta(mes, tz);
   const supabase = await createClient();
 
   let consulta = supabase
@@ -99,7 +103,8 @@ export default async function AdminCalendarioPage({
   const eventos: EventoCalendario[] = filas
     .filter((i) => i.scheduled_for)
     .map((i) => {
-      const cuando = new Date(i.scheduled_for as string);
+      // Día y hora en la zona de quien mira: el servidor corre en UTC.
+      const cuando = aZona(i.scheduled_for as string, tz);
       return {
         id: i.id,
         dia: claveDia(cuando),
@@ -204,6 +209,7 @@ export default async function AdminCalendarioPage({
         diaActivo={diaActivo}
         hrefMes={hrefMes}
         hrefDia={hrefDia}
+        hoy={claveDia(hoyEn(tz))}
       />
 
       {eventos.length === 0 && (

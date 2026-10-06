@@ -28,15 +28,23 @@ import {
 import { FaseTipoTransporte } from "@/components/inspection/fases/tipo-transporte";
 import { FaseVisual } from "@/components/inspection/fases/visual";
 import type { FotoServidor } from "@/components/inspection/captura-identificacion";
-import { GuardiaColectiva } from "@/components/inspection/colectiva";
+import { FirmasSoloEncargado, GuardiaColectiva } from "@/components/inspection/colectiva";
 import { obtenerPermisos, requerirSesion } from "@/lib/auth";
 import { ultimaPorPunto } from "@/lib/inspection/identificacion";
 import type { FaseId } from "@/lib/inspection/fases";
-import { construirFlujo, puedeAbrir } from "@/lib/inspection/flujo";
+import { construirFlujo, faseIdDeClave, puedeAbrir } from "@/lib/inspection/flujo";
 import { leerProgreso } from "@/lib/inspection/progreso";
 import type { GrupoPuntos } from "@/lib/inspection/puntos";
-import { otrosParticipantes, quienCierra } from "@/lib/inspection/colectiva";
-import { esColectiva, leerParticipantes } from "@/lib/inspecciones/colectiva";
+import {
+  esEncargado,
+  otrosParticipantes,
+  puedeCerrarColectiva,
+} from "@/lib/inspection/colectiva";
+import {
+  esColectiva,
+  leerParticipantes,
+  nombresDePerfiles,
+} from "@/lib/inspecciones/colectiva";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -55,12 +63,24 @@ export const dynamic = "force-dynamic";
 export default async function PasoPage(props: PageProps<"/inspeccion/[id]/[paso]">) {
   const { id, paso: clavePaso } = await props.params;
   const supabase = await createClient();
-  const [contenido, colectiva] = await Promise.all([
+  const [contenido, colectiva, sesion, { data: asignacion }] = await Promise.all([
     contenidoDeFase(props),
     esColectiva(supabase, id),
+    requerirSesion(),
+    supabase.from("inspections").select("assigned_to").eq("id", id).maybeSingle(),
   ]);
 
   if (!colectiva) return contenido;
+
+  // Quien no es el encargado y abre Firmas solo ve el aviso de que se cierra
+  // en otro teléfono: no ocupa la fase, para no anunciar a los demás que
+  // "está cerrando".
+  if (
+    faseIdDeClave(clavePaso) === "firmas" &&
+    !puedeCerrarColectiva(asignacion?.assigned_to ?? null, sesion.userId)
+  ) {
+    return contenido;
+  }
 
   // Colectiva: la fase la ocupa una sola persona a la vez. La key reinicia
   // la guardia al cambiar de fase.
@@ -80,11 +100,13 @@ async function contenidoDeFase({
 
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, status, transport_type, is_full, latitude, longitude, data, progress")
+    .select("id, status, transport_type, is_full, latitude, longitude, data, progress, assigned_to")
     .eq("id", id)
     .maybeSingle();
 
   if (!inspeccion) notFound();
+
+  const colectiva = await esColectiva(supabase, id);
 
   // Una inspección cerrada se consulta desde el expediente, no se reabre por
   // URL. Se manda al índice, que ya la muestra en modo lectura.
@@ -129,6 +151,8 @@ async function contenidoDeFase({
       esFull: inspeccion.is_full,
       nombreInspector: sesion.nombre,
       unidad: paso.unidad,
+      yoId: sesion.userId,
+      colectiva,
     },
   };
 
@@ -175,12 +199,21 @@ async function contenidoDeFase({
       );
 
     case "firmas": {
-      // Colectiva: firma cada participante, en el teléfono de quien hizo
-      // más fases. Si no se puede leer quién participó, firmas de siempre.
-      const personas = (await esColectiva(supabase, id))
-        ? await leerParticipantes(supabase, id)
-        : null;
-      const cierra = personas ? quienCierra(personas) : null;
+      // Colectiva: cierra solo el encargado, y en su teléfono firma cada
+      // participante. Si no se puede leer quién participó, firmas de siempre.
+      if (colectiva && !puedeCerrarColectiva(inspeccion.assigned_to, sesion.userId)) {
+        const nombres = await nombresDePerfiles(
+          [inspeccion.assigned_to],
+          sesion.companyAccountId
+        );
+        return (
+          <FirmasSoloEncargado
+            inspeccionId={id}
+            encargado={nombres.get(inspeccion.assigned_to ?? "") ?? "el encargado"}
+          />
+        );
+      }
+      const personas = colectiva ? await leerParticipantes(supabase, id) : null;
 
       // El conductor ya se capturó en su fase: la firma lo toma de ahí en
       // vez de volver a pedir el nombre.
@@ -195,8 +228,7 @@ async function contenidoDeFase({
                     perfilId: p.perfilId,
                     nombre: p.nombre,
                   })),
-                  cierra:
-                    cierra && cierra.perfilId !== sesion.userId ? cierra.nombre : null,
+                  encargado: esEncargado(inspeccion.assigned_to, sesion.userId),
                 }
               : undefined
           }

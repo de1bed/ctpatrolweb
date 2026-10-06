@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import { AppHeader } from "@/components/shell/app-header";
 import { InspectionCard } from "@/components/inspection/inspection-card";
+import { RefrescoEnVivo } from "@/components/inspection/refresco-en-vivo";
+import { equiposParaTarjetas } from "@/lib/inspecciones/colectiva";
 import { Card } from "@/components/ui/card";
 import { obtenerPermisos, requerirSesion } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -18,7 +20,7 @@ export default async function InicioPage() {
   const { data: activas } = await supabase
     .from("inspections")
     .select(
-      "id, display_id, status, customer_name, tractor_number, transport_type, updated_at, is_collective"
+      "id, display_id, status, customer_name, tractor_number, transport_type, updated_at, is_collective, assigned_to"
     )
     .eq("company_account_id", sesion.companyAccountId)
     .in("status", ["assigned", "in_progress", "paused"])
@@ -26,6 +28,9 @@ export default async function InicioPage() {
     .limit(20);
 
   const pendientes = activas ?? [];
+  // Colectivas: encargado, quién se unió y si alguien captura ahora.
+  const equipos = await equiposParaTarjetas(supabase, pendientes, sesion.companyAccountId);
+  const hayEnVivo = Object.values(equipos).some((e) => e.enVivo);
   const primerNombre = sesion.nombre.split(/\s+/)[0];
 
   return (
@@ -97,9 +102,10 @@ export default async function InicioPage() {
             // Una columna en teléfono, dos de iPad en adelante. En pantalla
             // grande una sola columna de tarjetas anchas se lee peor, no mejor.
             <ul className="grid gap-3 sm:grid-cols-2">
+              <RefrescoEnVivo activo={hayEnVivo} />
               {pendientes.map((insp) => (
                 <li key={insp.id}>
-                  <InspectionCard inspeccion={insp} />
+                  <InspectionCard inspeccion={insp} equipo={equipos[insp.id]} />
                 </li>
               ))}
             </ul>

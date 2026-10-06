@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { requerirSesion } from "@/lib/auth";
 import { construirFlujo } from "@/lib/inspection/flujo";
 import { leerProgreso } from "@/lib/inspection/progreso";
+import { nombresDePerfiles } from "@/lib/inspecciones/colectiva";
 import { createClient } from "@/lib/supabase/server";
 
 import { Galeria, type ItemEvidencia } from "./galeria";
@@ -28,12 +29,12 @@ export default async function EvidenciaPage({
   params,
 }: PageProps<"/inspeccion/[id]/evidencia">) {
   const { id } = await params;
-  await requerirSesion();
+  const sesion = await requerirSesion();
   const supabase = await createClient();
 
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, display_id, status, transport_type, is_full, progress, data")
+    .select("id, display_id, status, transport_type, is_full, progress, data, is_collective")
     .eq("id", id)
     .maybeSingle();
 
@@ -41,13 +42,21 @@ export default async function EvidenciaPage({
 
   const { data: media } = await supabase
     .from("inspection_media")
-    .select("id, kind, phase, point_key, point_label, storage_path, captured_at, latitude, longitude, ai_analysis")
+    .select("id, kind, phase, point_key, point_label, storage_path, captured_at, latitude, longitude, ai_analysis, captured_by")
     .eq("inspection_id", id)
     .not("storage_path", "is", null)
     .order("phase")
     .order("sort_order");
 
   const evidencia = media ?? [];
+
+  // Colectiva: quién tomó cada foto.
+  const autores = inspeccion.is_collective
+    ? await nombresDePerfiles(
+        evidencia.map((m) => m.captured_by),
+        sesion.companyAccountId
+      )
+    : new Map<string, string>();
 
   const rutas = evidencia.map((m) => m.storage_path!).filter(Boolean);
   const { data: firmados } = rutas.length
@@ -81,6 +90,7 @@ export default async function EvidenciaPage({
         punto: m.point_label ?? m.point_key ?? "Sin punto",
         url: m.storage_path ? (urlPorRuta.get(m.storage_path) ?? null) : null,
         capturadaEn: m.captured_at,
+        autor: m.captured_by ? (autores.get(m.captured_by) ?? null) : null,
         latitud: m.latitude,
         longitud: m.longitude,
         tieneAnalisis: Boolean(m.ai_analysis),

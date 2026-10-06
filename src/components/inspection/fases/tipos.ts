@@ -15,6 +15,10 @@ export type PropsFase = {
     nombreInspector: string;
     /** Número de caja (1 o 2) en las fases que se repiten por unidad. */
     unidad: number | null;
+    /** Perfil de quien captura. Sirve para avisar si edita algo ajeno. */
+    yoId?: string;
+    /** Inspección abierta a toda la empresa. */
+    colectiva?: boolean;
   };
 };
 

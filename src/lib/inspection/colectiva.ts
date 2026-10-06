@@ -3,7 +3,7 @@
  *
  * Varias personas de la misma empresa capturan una inspección: una fase la
  * ocupa una sola persona a la vez, y al final firman todos los que
- * participaron, en un solo teléfono.
+ * participaron, en el teléfono del encargado.
  *
  * Aquí solo hay lógica pura; los datos vienen de participantes_inspeccion
  * (migración 0020).
@@ -41,19 +41,7 @@ export function esParticipante(p: Persona): boolean {
   return p.fases > 0 || p.fotos > 0;
 }
 
-/**
- * En qué teléfono se firma: el de quien hizo más fases. Empate: más fotos,
- * luego por nombre, para que todos vean el mismo resultado.
- */
-export function quienCierra(personas: Persona[]): Persona | null {
-  const candidatos = personas.filter(esParticipante);
-  if (candidatos.length === 0) return null;
-  return [...candidatos].sort(
-    (a, b) => b.fases - a.fases || b.fotos - a.fotos || a.nombre.localeCompare(b.nombre)
-  )[0];
-}
-
-/** Los demás participantes: quienes tienen que firmar además de quien cierra. */
+/** Los demás participantes: quienes firman además del encargado, que cierra. */
 export function otrosParticipantes(personas: Persona[], yoId: string): Persona[] {
   return personas.filter((p) => esParticipante(p) && p.perfilId !== yoId);
 }
@@ -71,4 +59,41 @@ export function firmasPendientes(
 /** Quienes están ahora mismo dentro de alguna fase, sin contarme. */
 export function ocupadosPorOtros(personas: Persona[], yoId: string): Persona[] {
   return personas.filter((p) => p.pasoActual && p.perfilId !== yoId);
+}
+
+// ── Encargado ────────────────────────────────────────────────────────────────
+
+/** Alguien identificado por id y nombre. */
+export type Integrante = { id: string; nombre: string };
+
+/**
+ * Quién es el encargado de una colectiva.
+ *
+ * Es `assigned_to`: lo elige el admin al programarla en el calendario, o es
+ * quien la creó desde "Nueva inspección". Si el admin la dejó sin encargado,
+ * lo será quien la empiece (el servidor lo fija al guardar la primera fase).
+ * Solo el encargado cierra: en su teléfono se hace la firma final.
+ */
+export function esEncargado(assignedTo: string | null, yoId: string): boolean {
+  return assignedTo === yoId;
+}
+
+/** ¿Puede esta persona cerrar (firmar) la colectiva? Sin encargado, quien llegue. */
+export function puedeCerrarColectiva(assignedTo: string | null, yoId: string): boolean {
+  return assignedTo === null || assignedTo === yoId;
+}
+
+/**
+ * Quienes se unieron: participantes que no son el encargado, más quienes
+ * están ahora mismo dentro de una fase aunque todavía no guarden nada.
+ */
+export function unidos(personas: Persona[], encargadoId: string | null): Persona[] {
+  return personas.filter(
+    (p) => p.perfilId !== encargadoId && (esParticipante(p) || Boolean(p.pasoActual))
+  );
+}
+
+/** En vivo: alguien está capturando en este momento. */
+export function enVivo(personas: Persona[]): boolean {
+  return personas.some((p) => Boolean(p.pasoActual));
 }

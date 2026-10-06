@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, History } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { PastillaCreditos } from "@/components/shell/creditos";
 import { guardarFase } from "@/app/(flujo)/inspeccion/[id]/acciones";
 import { cn } from "@/lib/cn";
+import { leerAutoriaFase } from "@/lib/inspection/autoria";
+import { HoraLocal } from "@/components/ui/hora-local";
 
 /**
  * Armazón de una pantalla de fase.
@@ -34,6 +36,8 @@ export function PantallaFase({
   /** Bloquea el guardado con un motivo, cuando falta algo obligatorio. */
   faltante,
   etiquetaBoton = "Guardar y continuar",
+  datosPrevios,
+  contexto,
 }: {
   inspeccionId: string;
   clavePaso: string;
@@ -45,7 +49,14 @@ export function PantallaFase({
   recolectar: () => unknown;
   faltante?: string | null;
   etiquetaBoton?: string;
+  /** Lo guardado antes en esta fase: de ahí sale quién la capturó. */
+  datosPrevios?: Record<string, unknown> | null;
+  contexto?: { yoId?: string; colectiva?: boolean };
 }) {
+  const autoria = leerAutoriaFase(datosPrevios);
+  // Se avisa cuando lo último lo hizo otra persona: cualquier cambio que se
+  // guarde aquí pasa a nombre de quien guarda.
+  const deOtro = Boolean(autoria && contexto?.yoId && autoria.ultima.id !== contexto.yoId);
   const router = useRouter();
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,6 +172,39 @@ export function PantallaFase({
           >
             <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
             <span>{error}</span>
+          </div>
+        )}
+
+        {autoria && (deOtro || contexto?.colectiva) && (
+          <div
+            className={cn(
+              "mb-5 flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm",
+              deOtro
+                ? "border-warn-500/40 bg-warn-50 text-ink-secondary dark:bg-warn-500/10"
+                : "border-line bg-surface-raised text-ink-secondary"
+            )}
+          >
+            <History
+              className={cn("mt-0.5 size-4 shrink-0", deOtro ? "text-warn-600" : "text-ink-muted")}
+              aria-hidden
+            />
+            <div>
+              <p>
+                Último cambio:{" "}
+                <strong className="text-ink">
+                  {deOtro ? autoria.ultima.nombre : "tú"}
+                </strong>{" "}
+                · <HoraLocal iso={autoria.ultima.en} />
+                {autoria.primera && autoria.primera.id !== autoria.ultima.id && (
+                  <> · capturó primero {autoria.primera.nombre}</>
+                )}
+              </p>
+              {deOtro && (
+                <p className="mt-0.5">
+                  Si cambias algo, quedará registrado a tu nombre y en la bitácora.
+                </p>
+              )}
+            </div>
           </div>
         )}
 

@@ -2,6 +2,7 @@ import { format, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 
 import { Card } from "@/components/ui/card";
+import { aZona } from "@/lib/zona";
 
 export type Cierre = {
   assigned_to: string | null;
@@ -13,11 +14,14 @@ export type Cierre = {
 export function MetricasAdmin({
   cierres,
   nombres,
+  tz,
 }: {
   cierres: Cierre[];
   nombres: Map<string, string>;
+  /** Zona del usuario: un cierre a las 19:00 cuenta para hoy, no para mañana. */
+  tz: string;
 }) {
-  const porDia = volumenPorDia(cierres);
+  const porDia = volumenPorDia(cierres, tz);
   const maxDia = Math.max(1, ...porDia.map((d) => d.total));
   const inspectores = metricasPorInspector(cierres, nombres);
   const maxHechas = Math.max(1, ...inspectores.map((i) => i.hechas));
@@ -85,9 +89,10 @@ export function MetricasAdmin({
   );
 }
 
-function volumenPorDia(cierres: Cierre[]) {
+function volumenPorDia(cierres: Cierre[], tz: string) {
+  const hoy = aZona(new Date(), tz);
   const dias = Array.from({ length: 14 }, (_, i) => {
-    const fecha = subDays(new Date(), 13 - i);
+    const fecha = subDays(hoy, 13 - i);
     return {
       clave: format(fecha, "yyyy-MM-dd"),
       etiqueta: format(fecha, "d", { locale: es }),
@@ -97,7 +102,7 @@ function volumenPorDia(cierres: Cierre[]) {
   const indice = new Map(dias.map((d) => [d.clave, d]));
   for (const c of cierres) {
     if (!c.completed_at) continue;
-    const dia = indice.get(format(new Date(c.completed_at), "yyyy-MM-dd"));
+    const dia = indice.get(format(aZona(c.completed_at, tz), "yyyy-MM-dd"));
     if (dia) dia.total += 1;
   }
   return dias;

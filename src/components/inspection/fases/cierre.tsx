@@ -315,11 +315,12 @@ export function FaseFirmas(
     conductores?: string[];
     /**
      * Inspección colectiva: quienes participaron (sin contar a quien cierra)
-     * y, si no soy yo, quién hizo más fases.
+     * y si quien cierra es el encargado. Solo el encargado llega aquí; la
+     * excepción es una colectiva sin encargado, que cierra quien llegue.
      */
     colectiva?: {
       participantes: { perfilId: string; nombre: string }[];
-      cierra: string | null;
+      encargado: boolean;
     };
   }
 ) {
@@ -451,12 +452,11 @@ export function FaseFirmas(
             ) : (
               <p>Nadie más participó en esta inspección.</p>
             )}
-            {props.colectiva.cierra && (
-              <p className="font-medium text-warn-700 dark:text-warn-500">
-                Se recomienda cerrar en el teléfono de {props.colectiva.cierra}, que hizo
-                más fases. Si cierras aquí, todos deben firmar en este teléfono.
-              </p>
-            )}
+            <p className="font-medium text-ink">
+              {props.colectiva.encargado
+                ? "Eres el encargado: la firma final se hace en tu teléfono."
+                : "Esta inspección no tenía encargado: al cerrarla quedas como encargado."}
+            </p>
           </div>
         </Card>
       )}

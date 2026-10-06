@@ -15,6 +15,8 @@ export type ItemEvidencia = {
   punto: string;
   url: string | null;
   capturadaEn: string;
+  /** Quien tomó la foto. Solo en colectivas. */
+  autor?: string | null;
   latitud: number | null;
   longitud: number | null;
   tieneAnalisis: boolean;
@@ -238,6 +240,7 @@ export function Galeria({
             <div className="pb-4">
               <p className="font-mono text-xs text-white/80">
                 {format(new Date(activa.capturadaEn), "dd/MM/yyyy HH:mm:ss")}
+                {activa.autor && ` · Tomó: ${activa.autor}`}
               </p>
               {activa.hallazgo && (
                 <p className="mt-2 text-sm text-white/85">{activa.hallazgo}</p>

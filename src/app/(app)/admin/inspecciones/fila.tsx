@@ -1,7 +1,5 @@
 "use client";
 
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { Ban, ExternalLink, ShieldAlert, ShieldCheck, Trash2, UserCog } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
@@ -11,7 +9,9 @@ import { StatusBadge } from "@/components/inspection/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { aDatetimeLocal, fechaEnLista } from "@/lib/calendario";
+import { FechaEnLista } from "@/components/ui/fecha-en-lista";
+import { aDatetimeLocal } from "@/lib/calendario";
+import { aZona, desdeZona, formatoEnZona } from "@/lib/zona";
 import { cn } from "@/lib/cn";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -45,9 +45,16 @@ export type InspeccionAdmin = {
 export function FilaInspeccion({
   inspeccion,
   inspectores,
+  tz,
 }: {
   inspeccion: InspeccionAdmin;
   inspectores: { id: string; nombre: string }[];
+  /**
+   * Zona del admin. La fila se pinta primero en el servidor (UTC): sin esto
+   * el campo de fecha programada mostraba las 9:00 como 15:00 y, al
+   * ajustarlo, se guardaba recorrido seis horas.
+   */
+  tz: string;
 }) {
   const [pendiente, empezar] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -104,13 +111,11 @@ export function FilaInspeccion({
             {inspeccion.scheduled_for && (
               <>
                 Programada{" "}
-                {format(new Date(inspeccion.scheduled_for), "d MMM, HH:mm", {
-                  locale: es,
-                })}
+                {formatoEnZona(inspeccion.scheduled_for, "d MMM, HH:mm", tz)}
                 {" · "}
               </>
             )}
-            {fechaEnLista(inspeccion.completed_at ?? inspeccion.updated_at)}
+            <FechaEnLista iso={inspeccion.completed_at ?? inspeccion.updated_at} tz={tz} />
           </p>
         </div>
 
@@ -135,7 +140,9 @@ export function FilaInspeccion({
 
           <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-ink-secondary">
             <UserCog className="size-4 shrink-0" aria-hidden />
-            Inspector asignado
+            {inspeccion.is_collective
+              ? "Encargado · cierra la inspección y recoge las firmas"
+              : "Inspector asignado"}
           </label>
 
           <div className="flex flex-wrap gap-2">
@@ -186,7 +193,7 @@ export function FilaInspeccion({
                 disabled={pendiente}
                 defaultValue={
                   inspeccion.scheduled_for
-                    ? aDatetimeLocal(new Date(inspeccion.scheduled_for))
+                    ? aDatetimeLocal(aZona(inspeccion.scheduled_for, tz))
                     : ""
                 }
                 onChange={(e) => {
@@ -199,8 +206,9 @@ export function FilaInspeccion({
                     const r = await programarInspeccion({
                       inspeccionId: inspeccion.id,
                       inspectorId: inspeccion.assigned_to,
+                      // La hora tecleada es hora de pared en la zona del admin.
                       programadaPara: valor
-                        ? new Date(valor).toISOString()
+                        ? desdeZona(new Date(valor), tz).toISOString()
                         : null,
                     });
                     if (!r.ok) setError(r.error);

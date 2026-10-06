@@ -6,6 +6,8 @@ import type { Metadata } from "next";
 import { CalendarioMes, type EventoCalendario } from "@/components/calendario/mes";
 import { ListaDia } from "@/components/calendario/lista-dia";
 import { InspectionCard } from "@/components/inspection/inspection-card";
+import { RefrescoEnVivo } from "@/components/inspection/refresco-en-vivo";
+import { equiposParaTarjetas } from "@/lib/inspecciones/colectiva";
 import { AppHeader } from "@/components/shell/app-header";
 import { Card } from "@/components/ui/card";
 import { requerirSesion } from "@/lib/auth";
@@ -14,10 +16,13 @@ import {
   claveMes,
   colorPorId,
   mesDesdeParam,
-  rangoVisible,
+  hoyEn,
+  rangoConsulta,
 } from "@/lib/calendario";
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/server";
+import { aZona } from "@/lib/zona";
+import { zonaDelUsuario } from "@/lib/zona-servidor";
 
 export const metadata: Metadata = { title: "Inspecciones" };
 
@@ -39,25 +44,27 @@ export default async function InspeccionesPage({
   const params = await searchParams;
   const extra = params as typeof params & { mes?: string; dia?: string };
   const vista: Vista = extra.vista === "agenda" ? "agenda" : "abiertas";
+  const tz = await zonaDelUsuario();
   const mes = mesDesdeParam(
-    typeof extra.mes === "string" ? extra.mes : undefined
+    typeof extra.mes === "string" ? extra.mes : undefined,
+    tz
   );
   const diaParam = typeof extra.dia === "string" ? extra.dia : "";
   const diaActivo = /^\d{4}-\d{2}-\d{2}$/.test(diaParam)
     ? diaParam
-    : claveMes(mes) === claveMes(new Date())
-      ? claveDia(new Date())
+    : claveMes(mes) === claveMes(hoyEn(tz))
+      ? claveDia(hoyEn(tz))
       : `${claveMes(mes)}-01`;
 
   const supabase = await createClient();
-  const { desde, hasta } = rangoVisible(mes);
+  const { desde, hasta } = rangoConsulta(mes, tz);
 
   const { data } =
     vista === "agenda"
       ? await supabase
           .from("inspections")
           .select(
-            "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for, is_collective"
+            "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for, is_collective, assigned_to"
           )
           .eq("company_account_id", sesion.companyAccountId)
           .not("scheduled_for", "is", null)
@@ -69,7 +76,7 @@ export default async function InspeccionesPage({
       : await supabase
           .from("inspections")
           .select(
-            "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for, is_collective"
+            "id, display_id, status, customer_name, tractor_number, updated_at, scheduled_for, is_collective, assigned_to"
           )
           .eq("company_account_id", sesion.companyAccountId)
           .in("status", ["draft", "assigned", "in_progress", "paused"])
@@ -77,11 +84,18 @@ export default async function InspeccionesPage({
           .limit(100);
 
   const inspecciones = data ?? [];
+  // Colectivas: encargado, quién se unió y si alguien captura ahora.
+  const equipos =
+    vista === "abiertas"
+      ? await equiposParaTarjetas(supabase, inspecciones, sesion.companyAccountId)
+      : {};
+  const hayEnVivo = Object.values(equipos).some((e) => e.enVivo);
 
   const eventos: EventoCalendario[] = inspecciones
     .filter((i) => i.scheduled_for)
     .map((i) => {
-      const cuando = new Date(i.scheduled_for as string);
+      // Día y hora en la zona de quien mira: el servidor corre en UTC.
+      const cuando = aZona(i.scheduled_for as string, tz);
       return {
         id: i.id,
         dia: claveDia(cuando),
@@ -155,6 +169,7 @@ export default async function InspeccionesPage({
               diaActivo={diaActivo}
               hrefMes={hrefMes}
               hrefDia={hrefDia}
+              hoy={claveDia(hoyEn(tz))}
             />
             <ListaDia
               fecha={fechaDia}
@@ -173,9 +188,10 @@ export default async function InspeccionesPage({
           </Card>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
+            <RefrescoEnVivo activo={hayEnVivo} />
             {inspecciones.map((i) => (
               <li key={i.id}>
-                <InspectionCard inspeccion={i} />
+                <InspectionCard inspeccion={i} equipo={equipos[i.id]} />
               </li>
             ))}
           </ul>

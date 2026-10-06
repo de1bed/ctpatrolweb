@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, Images, PauseCircle, Play } from "lucide-react";
+import { ArrowLeft, Crown, FileText, Images, PauseCircle, Play } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -10,11 +10,14 @@ import { PastillaCreditos } from "@/components/shell/creditos";
 import { Bitacora } from "@/components/inspection/bitacora";
 import { Responsables } from "@/components/inspection/responsables";
 import { PresenciaColectiva } from "@/components/inspection/colectiva";
+import { EquipoInspeccion } from "@/components/inspection/equipo";
 import { Card } from "@/components/ui/card";
 import { requerirSesion } from "@/lib/auth";
 import { construirFlujo } from "@/lib/inspection/flujo";
+import { leerAutoriaFase } from "@/lib/inspection/autoria";
 import { leerProgreso } from "@/lib/inspection/progreso";
-import { esColectiva } from "@/lib/inspecciones/colectiva";
+import { puedeCerrarColectiva } from "@/lib/inspection/colectiva";
+import { esColectiva, leerEquipo } from "@/lib/inspecciones/colectiva";
 import { capacidadesDe } from "@/lib/inspection/transporte";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,7 +27,7 @@ export default async function InspeccionPage({
   params,
 }: PageProps<"/inspeccion/[id]">) {
   const { id } = await params;
-  await requerirSesion();
+  const sesion = await requerirSesion();
 
   const supabase = await createClient();
 
@@ -33,7 +36,7 @@ export default async function InspeccionPage({
   // existe, y eso ya es información que no le toca.
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, display_id, status, customer_name, driver_name, tractor_number, transport_type, is_full, progress")
+    .select("id, display_id, status, customer_name, driver_name, tractor_number, transport_type, is_full, progress, assigned_to, data")
     .eq("id", id)
     .maybeSingle();
 
@@ -50,9 +53,21 @@ export default async function InspeccionPage({
   const cerrada =
     inspeccion.status === "completed" || inspeccion.status === "cancelled";
 
-  // Colectiva abierta: se muestra quién está en qué fase y el aviso de firmas.
-  const colectiva = !cerrada && (await esColectiva(supabase, id));
+  // Colectiva: encargado, quién la inició y quién se unió, abierta o cerrada.
+  // Abierta, además, quién está en qué fase y el aviso de firmas.
+  const esDeEquipo = await esColectiva(supabase, id);
+  const colectiva = !cerrada && esDeEquipo;
+  const equipo = esDeEquipo
+    ? await leerEquipo(supabase, inspeccion, sesion.companyAccountId)
+    : null;
   const titulos = Object.fromEntries(flujo.pasos.map((p) => [p.clave, p.titulo]));
+
+  // En una colectiva solo el encargado entra a Firmas: a los demás, en vez
+  // del botón, se les dice en qué teléfono se cierra.
+  const firmasDeOtro =
+    colectiva &&
+    flujo.siguiente?.fase.id === "firmas" &&
+    !puedeCerrarColectiva(inspeccion.assigned_to, sesion.userId);
 
   return (
     <>
@@ -112,6 +127,15 @@ export default async function InspeccionPage({
             </div>
           </dl>
         </Card>
+
+        {equipo && (
+          <EquipoInspeccion
+            equipo={equipo}
+            titulos={titulos}
+            yoId={sesion.userId}
+            abierta={!cerrada}
+          />
+        )}
 
         {!cerrada && (
           <ControlesPausa
@@ -184,7 +208,11 @@ export default async function InspeccionPage({
         </Link>
 
         <div className="mt-7">
-          <PhaseList flujo={flujo} inspeccionId={inspeccion.id} />
+          <PhaseList
+            flujo={flujo}
+            inspeccionId={inspeccion.id}
+            autores={esDeEquipo ? autoresPorPaso(inspeccion.data, sesion.userId) : undefined}
+          />
         </div>
 
         <Responsables inspeccionId={inspeccion.id} />
@@ -198,6 +226,13 @@ export default async function InspeccionPage({
       {flujo.siguiente && !cerrada && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/90 px-gutter pb-safe pt-3 backdrop-blur-xl">
           <div className="mx-auto max-w-5xl pb-3">
+            {firmasDeOtro ? (
+              <p className="flex min-h-14 items-center justify-center gap-2.5 rounded-2xl border border-brand-200 bg-brand-50 px-4 text-center text-sm font-medium text-ink dark:border-brand-800 dark:bg-brand-950">
+                <Crown className="size-5 shrink-0 text-brand-600" aria-hidden />
+                Solo falta cerrar: la firma final se hace en el teléfono de{" "}
+                {equipo?.encargado?.nombre ?? "el encargado"}.
+              </p>
+            ) : (
             <Link
               href={`/inspeccion/${inspeccion.id}/${flujo.siguiente.clave}`}
               className="flex min-h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-brand-600 px-6 text-lg font-semibold text-white shadow-sm transition-transform active:scale-[0.98] hover:bg-brand-700"
@@ -207,9 +242,21 @@ export default async function InspeccionPage({
                 ? "Comenzar inspección"
                 : `Continuar · ${flujo.siguiente.titulo}`}
             </Link>
+            )}
           </div>
         </div>
       )}
     </>
   );
+}
+
+/** Quién hizo el último cambio de cada paso, según su autoría guardada. */
+function autoresPorPaso(data: unknown, yoId: string): Record<string, string> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const autores: Record<string, string> = {};
+  for (const [clave, fase] of Object.entries(data as Record<string, unknown>)) {
+    const a = leerAutoriaFase(fase);
+    if (a) autores[clave] = a.ultima.id === yoId ? "tú" : a.ultima.nombre;
+  }
+  return autores;
 }

@@ -7,10 +7,17 @@ import { requerirSesion } from "@/lib/auth";
 import {
   firmasPendientes,
   ocupadosPorOtros,
+  puedeCerrarColectiva,
   type FirmaParticipante,
   type Persona,
 } from "@/lib/inspection/colectiva";
-import { esColectiva, leerParticipantes } from "@/lib/inspecciones/colectiva";
+import {
+  esColectiva,
+  leerParticipantes,
+  nombresDePerfiles,
+} from "@/lib/inspecciones/colectiva";
+import { estamparAutoria, leerTocados } from "@/lib/inspection/autoria";
+import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
 import { enviarReporteAlCerrar } from "@/lib/email/reporte-cierre";
 import { ESQUEMAS, PROYECCIONES } from "@/lib/inspection/esquemas";
 import { FASES_POR_ID } from "@/lib/inspection/fases";
@@ -18,6 +25,7 @@ import { construirFlujo, faseIdDeClave, puedeAbrir } from "@/lib/inspection/fluj
 import { leerProgreso, marcarCompletado } from "@/lib/inspection/progreso";
 import { calcularResultado } from "@/lib/inspection/resultado";
 import { createClient } from "@/lib/supabase/server";
+import { zonaDelUsuario } from "@/lib/zona-servidor";
 import type { Json } from "@/lib/supabase/database.types";
 
 /** "Ana", "Ana y Beto", "Ana, Beto y Caro". */
@@ -64,7 +72,7 @@ export async function guardarFase(
   // ── Estado actual ─────────────────────────────────────────────────────────
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, status, transport_type, is_full, data, progress, timings, started_at")
+    .select("id, status, transport_type, is_full, data, progress, timings, started_at, assigned_to")
     .eq("id", inspeccionId)
     .maybeSingle();
 
@@ -125,7 +133,27 @@ export async function guardarFase(
   // ── Colectiva: nadie captura encima de otro ───────────────────────────────
   // El teléfono ya bloquea la pantalla, pero el servidor es lo que cuenta.
   // Si no se puede leer quién participa, se guarda como inspección normal.
-  if (await esColectiva(supabase, inspeccionId)) {
+  const colectiva = await esColectiva(supabase, inspeccionId);
+
+  // Solo el encargado cierra: en su teléfono se hace la firma final. Si la
+  // colectiva no tiene encargado, quien la cierre queda como tal.
+  if (
+    colectiva &&
+    faseId === "firmas" &&
+    !puedeCerrarColectiva(inspeccion.assigned_to, sesion.userId)
+  ) {
+    const nombres = await nombresDePerfiles(
+      [inspeccion.assigned_to],
+      sesion.companyAccountId
+    );
+    const encargado = nombres.get(inspeccion.assigned_to ?? "") ?? "el encargado";
+    return {
+      ok: false,
+      error: `Solo ${encargado}, encargado de esta inspección, puede cerrarla. La firma final se hace en su teléfono.`,
+    };
+  }
+
+  if (colectiva) {
     const personas = await leerParticipantes(supabase, inspeccionId);
     if (personas) {
       const ocupante = personas.find(
@@ -162,6 +190,22 @@ export async function guardarFase(
     }
   }
 
+  // ── Autoría ───────────────────────────────────────────────────────────────
+  // Quién capturó y quién cambió al último cada punto y cada fase. Se estampa
+  // aquí, con la sesión, nunca con lo que diga el teléfono.
+  const dataPrevia =
+    inspeccion.data && typeof inspeccion.data === "object" && !Array.isArray(inspeccion.data)
+      ? (inspeccion.data as Record<string, unknown>)
+      : {};
+  const autoria = estamparAutoria({
+    anterior: dataPrevia[clavePaso],
+    nuevo: datos,
+    tocados: leerTocados(datosCrudos),
+    autor: { id: sesion.userId, nombre: sesion.nombre, en: new Date().toISOString() },
+    puntosCatalogo: fase.puntos ? PUNTOS_POR_GRUPO[fase.puntos] : null,
+  });
+  const datosGuardados = autoria.datos;
+
   // ── Escritura ─────────────────────────────────────────────────────────────
   // Tope de 2 horas por visita: si el inspector dejó la pestaña abierta toda
   // la noche, ese número no mide trabajo y contaminaría el promedio.
@@ -175,7 +219,7 @@ export async function guardarFase(
     .rpc("guardar_fase_inspeccion", {
       p_id: inspeccionId,
       p_paso: clavePaso,
-      p_datos: datos as Json,
+      p_datos: datosGuardados as Json,
       p_segundos: segundos,
     })
     .maybeSingle();
@@ -212,7 +256,7 @@ export async function guardarFase(
       inspeccion.data && typeof inspeccion.data === "object" && !Array.isArray(inspeccion.data)
         ? (inspeccion.data as Record<string, Json>)
         : {};
-    nuevaData = { ...dataActual, [clavePaso]: datos as Json };
+    nuevaData = { ...dataActual, [clavePaso]: datosGuardados as Json };
     nuevoProgreso = marcarCompletado(progreso, clavePaso);
 
     // Tiempo por fase. Se ACUMULA en vez de sobrescribir: si el inspector
@@ -229,7 +273,7 @@ export async function guardarFase(
   }
 
   const proyeccion = PROYECCIONES[faseId];
-  const columnas = proyeccion ? proyeccion(datos) : {};
+  const columnas = proyeccion ? proyeccion(datos, { tz: await zonaDelUsuario() }) : {};
 
   // Primera captura: la inspección pasa de "asignada" a "en curso".
   const arrancando =
@@ -285,21 +329,61 @@ export async function guardarFase(
     };
   }
 
+  // Colectiva sin encargado: lo es quien la empieza. La condición sobre
+  // `assigned_to` en el UPDATE evita que dos que empiezan a la vez se pisen.
+  let tomoEncargo = false;
+  if (colectiva && !inspeccion.assigned_to) {
+    const { data: tomada } = await supabase
+      .from("inspections")
+      .update({ assigned_to: sesion.userId })
+      .eq("id", inspeccionId)
+      .is("assigned_to", null)
+      .select("id")
+      .maybeSingle();
+    tomoEncargo = Boolean(tomada);
+  }
+
   // Bitácora. Es append-only y es lo que permite reconstruir qué pasó si
-  // alguien reclama el resultado de una inspección.
-  await supabase.from("inspection_events").insert({
-    inspection_id: inspeccionId,
-    actor_id: sesion.userId,
-    event: cerrando ? "completed" : "phase_completed",
-    payload: (cerrando
-      ? { paso: clavePaso, aprobada: resultado?.aprobada, hallazgos: resultado?.hallazgos }
-      : {
-          paso: clavePaso,
-          ...(typeof datos.escalamiento === "string" && datos.escalamiento !== "ninguno"
-            ? { escalamiento: datos.escalamiento, nota: datos.escalamientoNota ?? "" }
-            : {}),
-        }) as Json,
-  });
+  // alguien reclama el resultado de una inspección. Lleva el detalle de qué
+  // cambió, para saber quién dejó cada dato como está.
+  const detalle = {
+    ...(autoria.edicion ? { edicion: true } : {}),
+    ...(autoria.edicion && !autoria.huboCambios ? { sinCambios: true } : {}),
+    ...(autoria.cambios.length > 0 ? { cambios: autoria.cambios } : {}),
+    ...(autoria.resumen ? { resumen: autoria.resumen } : {}),
+  };
+  const eventos = [
+    ...(tomoEncargo
+      ? [
+          {
+            inspection_id: inspeccionId,
+            actor_id: sesion.userId,
+            event: "lead_claimed",
+            payload: { paso: clavePaso } as Json,
+          },
+        ]
+      : []),
+    {
+      inspection_id: inspeccionId,
+      actor_id: sesion.userId,
+      event: cerrando ? "completed" : "phase_completed",
+      payload: (cerrando
+        ? {
+            paso: clavePaso,
+            aprobada: resultado?.aprobada,
+            hallazgos: resultado?.hallazgos,
+            ...detalle,
+          }
+        : {
+            paso: clavePaso,
+            ...(typeof datos.escalamiento === "string" && datos.escalamiento !== "ninguno"
+              ? { escalamiento: datos.escalamiento, nota: datos.escalamientoNota ?? "" }
+              : {}),
+            ...detalle,
+          }) as Json,
+    },
+  ];
+  await supabase.from("inspection_events").insert(eventos);
 
   // Se recalcula el flujo YA con esta fase marcada: cambiar el tipo de
   // transporte reescribe qué sigue, así que no sirve el cálculo de arriba.

@@ -2,6 +2,7 @@ import { FolderOpen, Search } from "lucide-react";
 import type { Metadata } from "next";
 
 import { InspectionCard } from "@/components/inspection/inspection-card";
+import { equiposParaTarjetas } from "@/lib/inspecciones/colectiva";
 import { AppHeader } from "@/components/shell/app-header";
 import { Card } from "@/components/ui/card";
 import { requerirSesion } from "@/lib/auth";
@@ -28,7 +29,7 @@ export default async function ExpedientesPage({
   let consulta = supabase
     .from("inspections")
     .select(
-      "id, display_id, status, customer_name, tractor_number, updated_at, completed_at, passed, findings_count, is_collective"
+      "id, display_id, status, customer_name, tractor_number, updated_at, completed_at, passed, findings_count, is_collective, assigned_to"
     )
     .eq("company_account_id", sesion.companyAccountId)
     .eq("status", "completed")
@@ -48,6 +49,7 @@ export default async function ExpedientesPage({
 
   const { data } = await consulta;
   const expedientes = data ?? [];
+  const equipos = await equiposParaTarjetas(supabase, expedientes, sesion.companyAccountId);
 
   return (
     <>
@@ -91,7 +93,7 @@ export default async function ExpedientesPage({
           <ul className="grid gap-3 sm:grid-cols-2">
             {expedientes.map((i) => (
               <li key={i.id}>
-                <InspectionCard inspeccion={i} mostrarResultado />
+                <InspectionCard inspeccion={i} mostrarResultado equipo={equipos[i.id]} />
               </li>
             ))}
           </ul>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import { RegistrarServiceWorker } from "@/components/pwa/registrar-sw";
+import { RegistrarZona } from "@/components/registrar-zona";
 
 import "./globals.css";
 
@@ -88,6 +89,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         {children}
         <RegistrarServiceWorker />
+        <RegistrarZona />
       </body>
     </html>
   );

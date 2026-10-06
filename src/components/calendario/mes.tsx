@@ -34,19 +34,22 @@ export function CalendarioMes({
   diaActivo,
   hrefMes,
   hrefDia,
+  hoy: hoyClave,
 }: {
   mes: Date;
   eventos: EventoCalendario[];
   diaActivo?: string;
   hrefMes: (clave: string) => string;
   hrefDia: (clave: string) => string;
+  /** "yyyy-MM-dd" de hoy en la zona del usuario. El servidor corre en UTC. */
+  hoy?: string;
 }) {
   const porDia = new Map<string, EventoCalendario[]>();
   for (const e of eventos) {
     porDia.set(e.dia, [...(porDia.get(e.dia) ?? []), e]);
   }
 
-  const hoy = claveDia(new Date());
+  const hoy = hoyClave ?? claveDia(new Date());
   const celdas = diasDelCalendario(mes);
 
   return (
