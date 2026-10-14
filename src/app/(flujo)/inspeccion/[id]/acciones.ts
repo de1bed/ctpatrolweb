@@ -105,7 +105,10 @@ export async function guardarFase(
   if (!puedeAbrir(flujo, clavePaso)) {
     return {
       ok: false,
-      error: "Todavía no puedes abrir esa fase. Termina primero las obligatorias.",
+      error:
+        fase.grupo === "cierre" && flujo.navegacionLibre
+          ? "El cierre se abre cuando estén completos todos los puntos de inspección."
+          : "Todavía no puedes abrir esa fase. Termina primero las obligatorias.",
     };
   }
 

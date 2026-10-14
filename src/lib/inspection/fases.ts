@@ -57,9 +57,12 @@ export type DefinicionFase = {
   grupo: GrupoFase;
 
   /**
-   * Crítica: no se puede pausar la inspección ni saltar libremente entre
-   * pantallas hasta terminarlas todas. Son las que definen QUÉ se inspecciona;
-   * sin ellas el resto del flujo no sabe qué mostrar.
+   * Crítica: datos primordiales. No se puede pausar la inspección ni saltar
+   * libremente entre pantallas hasta terminarlas todas. Son las que definen
+   * QUÉ se inspecciona; sin ellas el resto del flujo no sabe qué mostrar.
+   *
+   * Solo tiene sentido en preparación y datos de la unidad. Lo que va después
+   * no se protege con esta marca: el cierre tiene su propia regla en el motor.
    */
   critica: boolean;
 
@@ -166,7 +169,7 @@ export const FASES: DefinicionFase[] = [
     nombre: "Inspección de tractor",
     descripcion: "16 puntos con evidencia fotográfica",
     grupo: "inspeccion-fisica",
-    critica: true,
+    critica: false,
     puntos: "tractor",
   },
   {
@@ -268,7 +271,7 @@ export const FASES: DefinicionFase[] = [
     nombre: "Firmas",
     descripcion: "Inspector y conductor",
     grupo: "cierre",
-    critica: true,
+    critica: false,
   },
 ];
 

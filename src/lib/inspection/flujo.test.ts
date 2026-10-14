@@ -230,13 +230,50 @@ describe("puedeAbrir", () => {
     assert.equal(puedeAbrir(flujo, "configuracion"), true);
   });
 
-  it("con las críticas listas deja abrir cualquiera", () => {
+  it("con los datos primordiales listos abre la inspección física en cualquier orden", () => {
     const inicial = construirFlujo(base({ tipoTransporte: "contenedor" }));
     const criticas = inicial.pasos.filter((p) => p.fase.critica).map((p) => p.clave);
     const flujo = construirFlujo(
       base({ tipoTransporte: "contenedor", completados: criticas })
     );
+    assert.equal(flujo.navegacionLibre, true, "las firmas no deben bloquear la navegación");
+    assert.equal(puedeAbrir(flujo, "inspeccion-externa~1"), true);
+    assert.equal(puedeAbrir(flujo, "tractor-visual"), true);
+    assert.equal(puedeAbrir(flujo, "documentos"), true);
+  });
+
+  it("el cierre sigue bloqueado mientras falte algo antes de él", () => {
+    const inicial = construirFlujo(base({ tipoTransporte: "contenedor" }));
+    const casiTodo = inicial.pasos
+      .filter((p) => p.fase.grupo !== "cierre" && p.clave !== "inspeccion-externa~1")
+      .map((p) => p.clave);
+    const flujo = construirFlujo(
+      base({ tipoTransporte: "contenedor", completados: casiTodo })
+    );
+    assert.equal(puedeAbrir(flujo, "sellos~1"), false);
+    assert.equal(puedeAbrir(flujo, "comentarios"), false);
+    assert.equal(puedeAbrir(flujo, "firmas"), false);
+  });
+
+  it("con todo lo previo completo abre el cierre, pero las firmas van al final", () => {
+    const inicial = construirFlujo(base({ tipoTransporte: "contenedor" }));
+    const previos = inicial.pasos
+      .filter((p) => p.fase.grupo !== "cierre")
+      .map((p) => p.clave);
+    const flujo = construirFlujo(
+      base({ tipoTransporte: "contenedor", completados: previos })
+    );
+    assert.equal(puedeAbrir(flujo, "sellos~1"), true);
     assert.equal(puedeAbrir(flujo, "comentarios"), true);
+    assert.equal(puedeAbrir(flujo, "firmas"), false);
+
+    const sinFirmas = inicial.pasos
+      .filter((p) => p.fase.id !== "firmas")
+      .map((p) => p.clave);
+    const listo = construirFlujo(
+      base({ tipoTransporte: "contenedor", completados: sinFirmas })
+    );
+    assert.equal(puedeAbrir(listo, "firmas"), true);
   });
 
   it("rechaza una clave que no existe en este flujo", () => {

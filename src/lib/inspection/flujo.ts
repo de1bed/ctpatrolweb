@@ -61,6 +61,12 @@ export type Flujo = {
    */
   navegacionLibre: boolean;
   puedePausar: boolean;
+  /**
+   * Pasos previos al cierre que faltan. Mientras no esté vacío, el cierre
+   * (sellos, revisión, firmas…) sigue bloqueado: no se cierra una unidad con
+   * puntos de inspección sin capturar.
+   */
+  pendientesAntesDeCierre: Paso[];
 };
 
 /**
@@ -153,6 +159,9 @@ export function construirFlujo(estado: EstadoFlujo): Flujo {
   const hechos = pasos.filter((p) => p.completado).length;
   const criticosPendientes = pasos.filter((p) => p.fase.critica && !p.completado);
   const navegacionLibre = criticosPendientes.length === 0;
+  const pendientesAntesDeCierre = pasos.filter(
+    (p) => p.fase.grupo !== "cierre" && !p.completado
+  );
 
   return {
     pasos,
@@ -166,23 +175,35 @@ export function construirFlujo(estado: EstadoFlujo): Flujo {
     // Pausar exige los críticos listos. Si no, al retomar la inspección no
     // habría forma de saber qué pantallas le corresponden.
     puedePausar: navegacionLibre,
+    pendientesAntesDeCierre,
   };
 }
 
 /**
  * ¿Se puede abrir este paso?
  *
- * Antes de terminar los críticos el flujo va guiado: solo se abre el
- * siguiente pendiente, o algo ya terminado (para corregirlo). Después se
- * abre cualquiera — el inspector conoce su trabajo y a veces necesita
- * adelantarse porque el conductor ya se bajó o la caja llegó primero.
+ * Tres etapas:
+ *
+ * 1. Antes de terminar los críticos (datos primordiales) el flujo va guiado:
+ *    solo se abre el siguiente pendiente, o algo ya terminado para corregirlo.
+ * 2. Después se abre cualquier paso de preparación, unidad o inspección
+ *    física, en el orden que sea. En una colectiva es lo que permite que cada
+ *    quien tome un punto distinto; y un inspector solo a veces necesita
+ *    adelantarse porque el conductor ya se bajó o la caja llegó primero.
+ * 3. El cierre se abre hasta que todo lo anterior está completo. Las firmas,
+ *    además, esperan al resto del cierre: se firma lo que ya está capturado.
  */
 export function puedeAbrir(flujo: Flujo, clave: string): boolean {
   const paso = flujo.pasos.find((p) => p.clave === clave);
   if (!paso) return false;
   if (paso.completado) return true;
-  if (flujo.navegacionLibre) return true;
-  return flujo.siguiente?.clave === clave;
+  if (!flujo.navegacionLibre) return flujo.siguiente?.clave === clave;
+  if (paso.fase.grupo !== "cierre") return true;
+  if (flujo.pendientesAntesDeCierre.length > 0) return false;
+  if (paso.fase.id === "firmas") {
+    return flujo.pasos.every((p) => p.completado || p.fase.id === "firmas");
+  }
+  return true;
 }
 
 /** Pasos agrupados para el índice, respetando el orden del catálogo. */

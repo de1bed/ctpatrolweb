@@ -36,6 +36,19 @@ export function PhaseList({
             {NOMBRES_GRUPO[grupo as GrupoFase]}
           </h2>
 
+          {grupo === "cierre" &&
+            flujo.navegacionLibre &&
+            flujo.pendientesAntesDeCierre.length > 0 && (
+              <p className="-mt-1 mb-2.5 flex items-center gap-1.5 text-sm text-ink-secondary">
+                <Lock className="size-3.5 shrink-0" aria-hidden />
+                Se desbloquea al completar{" "}
+                {flujo.pendientesAntesDeCierre.length === 1
+                  ? "la sección que falta"
+                  : `las ${flujo.pendientesAntesDeCierre.length} secciones que faltan`}
+                .
+              </p>
+            )}
+
           <ul className="overflow-hidden rounded-2xl border border-line bg-surface-raised">
             {pasos.map((paso, i) => {
               const abrible = puedeAbrir(flujo, paso.clave);
