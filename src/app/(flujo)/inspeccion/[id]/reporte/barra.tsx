@@ -3,6 +3,7 @@
 import { ArrowLeft, Printer } from "lucide-react";
 import Link from "next/link";
 
+import { AvisoCreditos } from "@/components/shell/creditos";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -21,6 +22,7 @@ export function BarraReporte({
 }) {
   return (
     <div className="no-imprimir sticky top-0 z-30 border-b border-line bg-surface/90 pt-safe backdrop-blur-xl">
+      <AvisoCreditos />
       <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-gutter">
         <Link
           href={`/inspeccion/${inspeccionId}`}

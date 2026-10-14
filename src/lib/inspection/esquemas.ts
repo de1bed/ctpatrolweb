@@ -189,13 +189,23 @@ export const esquemaVisual = z
 export const esquemaSellos = z.object({
   sellos: z
     .array(
-      z.object({
-        numero: z.string().trim().min(1, "Falta el número de sello").max(60),
-        ver: z.boolean().default(false),
-        verificar: z.boolean().default(false),
-        jalar: z.boolean().default(false),
-        girar: z.boolean().default(false),
-      })
+      z
+        .object({
+          numero: z.string().trim().max(60).default(""),
+          ver: z.boolean().default(false),
+          verificar: z.boolean().default(false),
+          jalar: z.boolean().default(false),
+          girar: z.boolean().default(false),
+          noAplica: z.boolean().default(false),
+        })
+        .superRefine((sello, ctx) => {
+          if (sello.noAplica || sello.numero.trim()) return;
+          ctx.addIssue({
+            code: "custom",
+            message: "Falta el número de sello",
+            path: ["numero"],
+          });
+        })
     )
     .min(1, "Registra al menos un sello"),
 });

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { PastillaCreditos } from "@/components/shell/creditos";
+import { AvisoCreditos, PastillaCreditos } from "@/components/shell/creditos";
 import { guardarFase } from "@/app/(flujo)/inspeccion/[id]/acciones";
 import { cn } from "@/lib/cn";
 import { leerAutoriaFase } from "@/lib/inspection/autoria";
@@ -137,6 +137,7 @@ export function PantallaFase({
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-line bg-surface/85 pt-safe backdrop-blur-xl">
+        <AvisoCreditos />
         <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-gutter">
           <button
             type="button"

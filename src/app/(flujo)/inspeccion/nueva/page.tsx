@@ -2,6 +2,7 @@ import { ArrowLeft, Lock, Plus } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { AvisoCreditos } from "@/components/shell/creditos";
 import { Card } from "@/components/ui/card";
 import { obtenerPermisos, requerirSesion } from "@/lib/auth";
 
@@ -24,6 +25,7 @@ export default async function NuevaInspeccionPage() {
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-line bg-surface/85 pt-safe backdrop-blur-xl">
+        <AvisoCreditos />
         <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-gutter">
           <Link
             href="/"

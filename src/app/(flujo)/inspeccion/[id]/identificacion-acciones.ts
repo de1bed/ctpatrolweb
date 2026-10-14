@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai/identificacion";
 import { LADO_VISION_DOCUMENTO, prepararParaVision } from "@/lib/ai/imagen";
 import { isOpenAiConfigured } from "@/lib/env";
+import { anotarUsoIa } from "@/lib/ia/anotar";
 import { consumirCredito, reembolsarCredito } from "@/lib/ia/creditos";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,14 +40,14 @@ const esquema = z
   });
 
 export type ResultadoLecturaIdentificacion =
-  | { ok: true; datos: LecturaIdentificacion }
+  | { ok: true; datos: LecturaIdentificacion; creditos: number | null }
   | { ok: false; error: string };
 
 export async function leerIdentificacion(
   entrada: unknown
 ): Promise<ResultadoLecturaIdentificacion> {
   // Sesión obligatoria: esta ruta gasta dinero por llamada.
-  await requerirSesion();
+  const sesion = await requerirSesion();
 
   if (!isOpenAiConfigured()) {
     return {
@@ -113,7 +114,25 @@ export async function leerIdentificacion(
       await reembolsarCredito(cobro.movimientoId);
       return { ok: false, error: resultado.error };
     }
-    return { ok: true, datos: resultado.datos };
+
+    await anotarUsoIa({
+      inspectionId: d.inspeccionId,
+      actorId: sesion.userId,
+      event: "ai_lectura",
+      payload: {
+        uso: d.tipo,
+        mediaId: d.mediaId ?? null,
+        resultado: resultado.datos,
+      },
+    });
+
+    const { data: cuenta } = await supabase
+      .from("company_accounts")
+      .select("creditos_ia")
+      .eq("id", sesion.companyAccountId)
+      .maybeSingle();
+
+    return { ok: true, datos: resultado.datos, creditos: cuenta?.creditos_ia ?? null };
   } catch {
     // Una imagen corrupta revienta en sharp antes de llegar al modelo: el
     // crédito no se usó, se devuelve.

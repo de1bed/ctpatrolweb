@@ -4,6 +4,7 @@ import { AlertCircle, Camera, ImageIcon, LoaderCircle, ScanLine, TriangleAlert, 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { escanearDocumento } from "@/app/(flujo)/inspeccion/[id]/ocr-acciones";
+import { useCreditos } from "@/components/shell/creditos";
 import { extraerCampoLocal } from "@/lib/ai/ocr-local";
 import { textoObjetivo, type ObjetivoDocumento } from "@/lib/ai/campos-documento";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,11 @@ export type LecturaCampo = {
  */
 export async function procesarImagenDocumento(
   blob: Blob,
-  objetivo: ObjetivoDocumento
-): Promise<{ ok: true; datos: LecturaCampo } | { ok: false; error: string }> {
+  objetivo: ObjetivoDocumento,
+  inspeccionId?: string
+): Promise<
+  { ok: true; datos: LecturaCampo; creditos?: number | null } | { ok: false; error: string }
+> {
   let jpeg: string;
   try {
     jpeg = await blobAJpegBase64(blob);
@@ -42,6 +46,7 @@ export async function procesarImagenDocumento(
     mimeType: "image/jpeg",
     campo: objetivo.campo,
     ...(objetivo.campo === "otro" ? { titulo: objetivo.titulo } : {}),
+    ...(inspeccionId ? { inspeccionId } : {}),
   });
 
   if (remoto.ok) return remoto;
@@ -68,11 +73,13 @@ export async function procesarImagenDocumento(
  */
 export function EscanerDocumentos({
   objetivo,
+  inspeccionId,
   onExtraer,
   onImagen,
   onCerrar,
 }: {
   objetivo: ObjetivoDocumento;
+  inspeccionId?: string;
   onExtraer: (datos: LecturaCampo) => void;
   onImagen: (blob: Blob) => void;
   onCerrar: () => void;
@@ -83,6 +90,7 @@ export function EscanerDocumentos({
   // `capture` va a la cámara, no a la galería.
   const archivoCamaraRef = useRef<HTMLInputElement>(null);
   const etiqueta = textoObjetivo(objetivo).etiqueta;
+  const creditos = useCreditos();
 
   const [estado, setEstado] = useState<"abriendo" | "lista" | "leyendo" | "error">(
     "abriendo"
@@ -125,8 +133,9 @@ export function EscanerDocumentos({
   }, [cerrarStream]);
 
   async function aplicarResultado(
-    r: { ok: true; datos: LecturaCampo } | { ok: false; error: string }
+    r: { ok: true; datos: LecturaCampo; creditos?: number | null } | { ok: false; error: string }
   ) {
+    if (r.ok && r.creditos != null) creditos?.fijar(r.creditos);
     if (!r.ok) {
       setError(r.error);
       setEstado(streamRef.current ? "lista" : "error");
@@ -179,10 +188,13 @@ export function EscanerDocumentos({
 
   async function leerYArchivar(blob: Blob) {
     try {
-      let resultado: { ok: true; datos: LecturaCampo } | { ok: false; error: string } | null =
+      let resultado:
+        | { ok: true; datos: LecturaCampo; creditos?: number | null }
+        | { ok: false; error: string }
+        | null =
         null;
       try {
-        resultado = await procesarImagenDocumento(blob, objetivo);
+        resultado = await procesarImagenDocumento(blob, objetivo, inspeccionId);
       } finally {
         onImagen(blob);
       }

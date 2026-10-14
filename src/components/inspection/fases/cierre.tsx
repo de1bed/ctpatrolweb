@@ -21,10 +21,11 @@ import {
 
 import { previo, type PropsFase } from "./tipos";
 
-type Sello = { numero: string } & Record<PasoVvtt, boolean>;
+type Sello = { numero: string; noAplica: boolean } & Record<PasoVvtt, boolean>;
 
 const SELLO_NUEVO: Sello = {
   numero: "",
+  noAplica: false,
   ver: false,
   verificar: false,
   jalar: false,
@@ -44,7 +45,9 @@ export function FaseSellos(
 ) {
   const [sellos, setSellos] = useState<Sello[]>(() => {
     const previos = previo<Sello[]>(props.datosPrevios, "sellos", []);
-    return previos.length > 0 ? previos : [{ ...SELLO_NUEVO }];
+    const lista = previos.length > 0 ? previos : [{ ...SELLO_NUEVO }];
+    // Sellos guardados antes de existir "no aplica" no traen el campo.
+    return lista.map((s) => ({ ...SELLO_NUEVO, ...s, noAplica: Boolean(s.noAplica) }));
   });
 
   const [videos, setVideos] = useState<Record<string, FotoLocal>>({});
@@ -115,14 +118,15 @@ export function FaseSellos(
 
   const incompletos = sellos.filter(
     (s, i) =>
-      !s.numero.trim() ||
-      !s.ver ||
-      !s.verificar ||
-      !s.jalar ||
-      !s.girar ||
-      // El clip es parte del protocolo, no un extra: sin él no hay prueba de
-      // que se jaló y giró.
-      !videos[`sello_${i + 1}`]
+      !s.noAplica &&
+      (!s.numero.trim() ||
+        !s.ver ||
+        !s.verificar ||
+        !s.jalar ||
+        !s.girar ||
+        // El clip es parte del protocolo, no un extra: sin él no hay prueba de
+        // que se jaló y giró. "No aplica" es la excepción, igual que en los puntos.
+        !videos[`sello_${i + 1}`])
   );
 
   const caja = props.contexto.unidad;
@@ -144,13 +148,14 @@ export function FaseSellos(
     >
       <div className="flex flex-col gap-3">
         {sellos.map((sello, i) => (
-          <Card key={i} className="p-4">
+          <Card key={i} className={cn("p-4", sello.noAplica && "opacity-60")}>
             <div className="flex items-start gap-2">
-              <Field label={`Número de sello ${i + 1}`} required className="flex-1">
+              <Field label={`Número de sello ${i + 1}`} required={!sello.noAplica} className="flex-1">
                 {(p) => (
                   <Input
                     {...p}
                     value={sello.numero}
+                    disabled={sello.noAplica}
                     onChange={(e) => actualizar(i, { numero: e.target.value })}
                     placeholder="Ej. 0483712"
                     autoCapitalize="characters"
@@ -197,6 +202,7 @@ export function FaseSellos(
                       type="button"
                       role="checkbox"
                       aria-checked={hecho}
+                      disabled={sello.noAplica}
                       aria-label={`${paso.nombre}: ${paso.pista}`}
                       onClick={() =>
                         actualizar(i, { [paso.clave]: !hecho } as Partial<Sello>)
@@ -236,7 +242,9 @@ export function FaseSellos(
                 Clip jalando y girando ({DURACION_MINIMA}-{DURACION_MAXIMA} s)
               </p>
 
-              {videos[`sello_${i + 1}`] && urls[`sello_${i + 1}`] ? (
+              {sello.noAplica ? (
+                <p className="text-sm text-ink-secondary">Sin clip: este sello no aplica.</p>
+              ) : videos[`sello_${i + 1}`] && urls[`sello_${i + 1}`] ? (
                 <div className="flex items-center gap-3">
                   <video
                     src={urls[`sello_${i + 1}`]}
@@ -272,6 +280,14 @@ export function FaseSellos(
                   Grabar clip del sello
                 </Button>
               )}
+
+              <button
+                type="button"
+                onClick={() => actualizar(i, { noAplica: !sello.noAplica })}
+                className="mt-2 text-sm font-medium text-ink-muted underline underline-offset-2"
+              >
+                {sello.noAplica ? "Sí aplica" : "No aplica"}
+              </button>
             </div>
           </Card>
         ))}

@@ -1,4 +1,4 @@
-import { ArrowLeft, Crown, FileText, Images, PauseCircle, Play } from "lucide-react";
+import { ArrowLeft, Crown, FileText, Images, PauseCircle, Play, ScrollText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -6,7 +6,7 @@ import { ControlesPausa } from "@/components/inspection/pause-controls";
 import { PhaseList } from "@/components/inspection/phase-list";
 import { ProgressBar } from "@/components/inspection/progress-bar";
 import { StatusBadge } from "@/components/inspection/status-badge";
-import { PastillaCreditos } from "@/components/shell/creditos";
+import { AvisoCreditos, PastillaCreditos } from "@/components/shell/creditos";
 import { Bitacora } from "@/components/inspection/bitacora";
 import { Responsables } from "@/components/inspection/responsables";
 import { PresenciaColectiva } from "@/components/inspection/colectiva";
@@ -74,6 +74,7 @@ export default async function InspeccionPage({
       {/* Encabezado propio, con botón de regreso: dentro de una inspección el
           contexto importa más que el saludo del inicio. */}
       <header className="sticky top-0 z-30 border-b border-line bg-surface/85 pt-safe backdrop-blur-xl">
+        <AvisoCreditos />
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-gutter">
           <Link
             href="/"
@@ -202,6 +203,23 @@ export default async function InspeccionPage({
               <span className="block font-semibold text-ink">Ver evidencia</span>
               <span className="block text-sm text-ink-secondary">
                 Todas las fotos y clips de esta inspección
+              </span>
+            </span>
+          </Card>
+        </Link>
+
+        <Link href={`/inspeccion/${inspeccion.id}/bitacora`} className="mt-4 block">
+          <Card
+            interactive
+            className="flex items-center gap-3 p-4 hover:border-line-strong"
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-surface-sunken">
+              <ScrollText className="size-5 text-ink-secondary" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-ink">Ver bitácora</span>
+              <span className="block text-sm text-ink-secondary">
+                Quién hizo qué, si se usó IA y qué respondió
               </span>
             </span>
           </Card>

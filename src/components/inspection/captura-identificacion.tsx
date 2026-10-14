@@ -4,6 +4,7 @@ import { Camera, RotateCcw, Sparkles, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { leerIdentificacion } from "@/app/(flujo)/inspeccion/[id]/identificacion-acciones";
+import { useCreditos } from "@/components/shell/creditos";
 import { CamaraPantallaCompleta } from "@/components/inspection/camera";
 import { Button } from "@/components/ui/button";
 import type { LecturaIdentificacion, TipoIdentificacion } from "@/lib/ai/identificacion";
@@ -69,6 +70,7 @@ export function CapturaIdentificacion({
    */
   onTieneFoto?: (tiene: boolean) => void;
 }) {
+  const creditos = useCreditos();
   const [fotoLocal, setFotoLocal] = useState<FotoLocal | null>(null);
   const [camaraAbierta, setCamaraAbierta] = useState(false);
   const [leyendo, setLeyendo] = useState(false);
@@ -192,6 +194,7 @@ export function CapturaIdentificacion({
       }
 
       const r = await leerIdentificacion(entrada);
+      if (r.ok && r.creditos != null) creditos?.fijar(r.creditos);
       if (!r.ok) {
         setError(`${r.error} Puedes capturar los datos a mano.`);
         return;

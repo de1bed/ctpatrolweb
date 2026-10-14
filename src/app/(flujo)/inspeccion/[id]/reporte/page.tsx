@@ -114,6 +114,18 @@ export default async function ReportePage({
     esFull: inspeccion.is_full,
     completados: progreso.completados,
   });
+  const sellosSinClip = flujo.pasos.flatMap((p) => {
+    if (p.fase.id !== "sellos") return [];
+    const lista = datos[p.clave]?.sellos;
+    if (!Array.isArray(lista)) return [];
+    return lista.flatMap((s, i) => {
+      if (!s || typeof s !== "object") return [];
+      const sello = s as { noAplica?: boolean; numero?: unknown };
+      if (sello.noAplica !== true) return [];
+      const numero = typeof sello.numero === "string" ? sello.numero.trim() : "";
+      return [`${p.titulo} · ${numero || `sello ${i + 1}`}`];
+    });
+  });
 
   const resultado = calcularResultado(inspeccion.data);
   const capacidades = capacidadesDe(inspeccion.transport_type);
@@ -462,6 +474,16 @@ export default async function ReportePage({
             En papel un video no se ve, así que además del reproductor se
             imprime la constancia de que existe, con su duración y momento.
             El expediente digital sí lo reproduce. */}
+        {sellosSinClip.length > 0 && (
+          <section>
+            <h2>Sellos marcados como no aplica</h2>
+            <p style={{ margin: 0 }}>
+              {sellosSinClip.join("; ")}. En esos no se exigió número, protocolo
+              ni clip.
+            </p>
+          </section>
+        )}
+
         {videos.length > 0 && (
           <section>
             <h2>Clips de verificación de sellos</h2>

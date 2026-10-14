@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { cerrarSesion } from "@/app/login/actions";
-import { PastillaCreditos } from "@/components/shell/creditos";
+import { AvisoCreditos, PastillaCreditos } from "@/components/shell/creditos";
 import { cn } from "@/lib/cn";
 
 function iniciales(nombre: string): string {
@@ -56,6 +56,7 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/85 pt-safe backdrop-blur-xl">
+      <AvisoCreditos />
       {/* px-gutter (no px-safe aquí) para que el título quede alineado con el
           contenido de la página, incluso en horizontal con notch a un lado. */}
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-gutter">

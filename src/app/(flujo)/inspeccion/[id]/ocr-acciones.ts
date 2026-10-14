@@ -3,9 +3,12 @@
 import { z } from "zod";
 
 import { requerirSesion } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { extraerDeDocumento, type LecturaCampo } from "@/lib/ai/ocr";
 import { LADO_VISION_DOCUMENTO, prepararParaVision } from "@/lib/ai/imagen";
 import { isOpenAiConfigured } from "@/lib/env";
+import { textoObjetivo, type ObjetivoDocumento } from "@/lib/ai/campos-documento";
+import { anotarUsoIa } from "@/lib/ia/anotar";
 import { consumirCredito, reembolsarCredito } from "@/lib/ia/creditos";
 
 /**
@@ -22,15 +25,16 @@ const esquema = z.object({
   mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
   campo: z.enum(["factura", "billOfLading", "pedimento", "sellosFiscales", "otro"]),
   titulo: z.string().trim().max(80).optional(),
+  inspeccionId: z.string().uuid().optional(),
 });
 
 export type ResultadoOcr =
-  | { ok: true; datos: LecturaCampo }
+  | { ok: true; datos: LecturaCampo; creditos: number | null }
   | { ok: false; error: string; codigo?: "no_configurado" | "imagen_invalida" };
 
 export async function escanearDocumento(entrada: unknown): Promise<ResultadoOcr> {
   // Sesión obligatoria: esta ruta gasta dinero por llamada.
-  await requerirSesion();
+  const sesion = await requerirSesion();
 
   if (!isOpenAiConfigured()) {
     return {
@@ -55,7 +59,16 @@ export async function escanearDocumento(entrada: unknown): Promise<ResultadoOcr>
     return { ok: false, error: "Escribe el título del documento antes de escanearlo.", codigo: "imagen_invalida" };
   }
 
-  const cobro = await consumirCredito({ nota: "Escaneo de documento" });
+  const objetivoLectura: ObjetivoDocumento =
+    validado.data.campo === "otro"
+      ? { campo: "otro", titulo: validado.data.titulo ?? "" }
+      : { campo: validado.data.campo };
+  const etiqueta = textoObjetivo(objetivoLectura).etiqueta;
+
+  const cobro = await consumirCredito({
+    nota: `Escaneo de ${etiqueta || "documento"}`,
+    inspectionId: validado.data.inspeccionId,
+  });
   if (!cobro.ok) return { ok: false, error: cobro.error };
 
   const crudo = Buffer.from(validado.data.imagenBase64, "base64");
@@ -65,16 +78,37 @@ export async function escanearDocumento(entrada: unknown): Promise<ResultadoOcr>
     LADO_VISION_DOCUMENTO
   );
 
-  const objetivo =
-    validado.data.campo === "otro"
-      ? { campo: "otro" as const, titulo: validado.data.titulo ?? "" }
-      : { campo: validado.data.campo };
-
-  const resultado = await extraerDeDocumento(imagen.base64, imagen.mimeType, objetivo);
+  const resultado = await extraerDeDocumento(
+    imagen.base64,
+    imagen.mimeType,
+    objetivoLectura
+  );
 
   if (!resultado.ok) {
     await reembolsarCredito(cobro.movimientoId);
     return { ok: false, error: resultado.error };
   }
-  return { ok: true, datos: resultado.datos };
+
+  if (validado.data.inspeccionId) {
+    await anotarUsoIa({
+      inspectionId: validado.data.inspeccionId,
+      actorId: sesion.userId,
+      event: "ai_ocr",
+      payload: {
+        uso: "documento",
+        campo: validado.data.campo,
+        etiqueta,
+        resultado: resultado.datos,
+      },
+    });
+  }
+
+  const supabase = await createClient();
+  const { data: cuenta } = await supabase
+    .from("company_accounts")
+    .select("creditos_ia")
+    .eq("id", sesion.companyAccountId)
+    .maybeSingle();
+
+  return { ok: true, datos: resultado.datos, creditos: cuenta?.creditos_ia ?? null };
 }

@@ -384,6 +384,7 @@ export function FaseDocumentos(
       {modoCamara === "escanear" && sesion && (
         <EscanerDocumentos
           objetivo={sesion.objetivo}
+          inspeccionId={props.inspeccionId}
           onExtraer={(datos) => escribirCampo(sesion, datos)}
           onImagen={(blob) => {
             void archivarImagen(blob, textoObjetivo(sesion.objetivo).etiqueta).catch(() =>

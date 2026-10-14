@@ -8,6 +8,7 @@ import { notaDelPunto } from "@/lib/ai/contexto";
 import { LADO_VISION_PUNTO, prepararParaVision } from "@/lib/ai/imagen";
 import { analizarPunto, type Analisis } from "@/lib/ai/vision";
 import { isOpenAiConfigured } from "@/lib/env";
+import { anotarUsoIa } from "@/lib/ia/anotar";
 import { consumirCredito, reembolsarCredito } from "@/lib/ia/creditos";
 import { PUNTOS_POR_GRUPO } from "@/lib/inspection/puntos";
 import { createClient } from "@/lib/supabase/server";
@@ -167,6 +168,26 @@ export async function analizarEvidencia(entrada: unknown): Promise<ResultadoIa> 
       ai_analyzed_at: new Date().toISOString(),
     })
     .eq("id", mediaId);
+
+  await anotarUsoIa({
+    inspectionId: inspeccionId,
+    actorId: sesion.userId,
+    event: "ai_analysis",
+    payload: {
+      uso: "analisis_foto",
+      mediaId,
+      punto: media.point_label ?? media.point_key ?? "Punto de inspección",
+      paso: media.phase,
+      resultado: {
+        observacion: resultado.analisis.observacion,
+        indicios: resultado.analisis.indicios,
+        calidadImagen: resultado.analisis.calidadImagen,
+        problemaCalidad: resultado.analisis.problemaCalidad,
+        sugerencia: resultado.analisis.sugerencia,
+        confianza: resultado.analisis.confianza,
+      },
+    },
+  });
 
   const { data: cuenta } = await supabase
     .from("company_accounts")

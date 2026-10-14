@@ -29,12 +29,16 @@ export default async function FlujoLayout({ children }: LayoutProps<"/">) {
   const supabase = await createClient();
   const { data: cuenta } = await supabase
     .from("company_accounts")
-    .select("creditos_ia")
+    .select("creditos_ia, ia_plataforma")
     .eq("id", sesion.companyAccountId)
     .maybeSingle();
 
   return (
-    <CreditosProvider inicial={cuenta?.creditos_ia ?? 0}>
+    <CreditosProvider
+      inicial={cuenta?.creditos_ia ?? 0}
+      esAdmin={sesion.esAdmin}
+      iaAutorizada={cuenta?.ia_plataforma ?? false}
+    >
     <div className="min-h-screen-safe bg-surface-sunken">
       {children}
       <Uploader companyAccountId={sesion.companyAccountId} />
