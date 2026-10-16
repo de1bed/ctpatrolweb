@@ -72,7 +72,7 @@ export async function guardarFase(
   // ── Estado actual ─────────────────────────────────────────────────────────
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, status, transport_type, is_full, data, progress, timings, started_at, assigned_to")
+    .select("id, status, transport_type, is_full, movement, data, progress, timings, started_at, assigned_to")
     .eq("id", inspeccionId)
     .maybeSingle();
 
@@ -92,10 +92,12 @@ export async function guardarFase(
   const flujo = construirFlujo({
     tipoTransporte: inspeccion.transport_type,
     esFull: inspeccion.is_full,
+    movimiento: inspeccion.movement,
     completados: progreso.completados,
   });
 
-  if (!flujo.pasos.some((p) => p.clave === clavePaso)) {
+  const paso = flujo.pasos.find((p) => p.clave === clavePaso);
+  if (!paso) {
     return {
       ok: false,
       error: "Esa fase no aplica a este tipo de transporte.",
@@ -106,7 +108,7 @@ export async function guardarFase(
     return {
       ok: false,
       error:
-        fase.grupo === "cierre" && flujo.navegacionLibre
+        paso.fase.grupo === "cierre" && flujo.navegacionLibre
           ? "El cierre se abre cuando estén completos todos los puntos de inspección."
           : "Todavía no puedes abrir esa fase. Termina primero las obligatorias.",
     };
@@ -395,6 +397,8 @@ export async function guardarFase(
       (columnas.transport_type as typeof inspeccion.transport_type) ??
       inspeccion.transport_type,
     esFull: (columnas.is_full as boolean) ?? inspeccion.is_full,
+    movimiento:
+      (columnas.movement as typeof inspeccion.movement) ?? inspeccion.movement,
     completados: nuevoProgreso.completados,
   });
 

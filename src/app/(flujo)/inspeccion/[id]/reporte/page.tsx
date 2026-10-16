@@ -112,6 +112,7 @@ export default async function ReportePage({
   const flujo = construirFlujo({
     tipoTransporte: inspeccion.transport_type,
     esFull: inspeccion.is_full,
+    movimiento: inspeccion.movement,
     completados: progreso.completados,
   });
   const sellosSinClip = flujo.pasos.flatMap((p) => {

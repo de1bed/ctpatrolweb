@@ -100,7 +100,7 @@ async function contenidoDeFase({
 
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, status, transport_type, is_full, latitude, longitude, data, progress, assigned_to")
+    .select("id, status, transport_type, is_full, movement, latitude, longitude, data, progress, assigned_to")
     .eq("id", id)
     .maybeSingle();
 
@@ -118,6 +118,7 @@ async function contenidoDeFase({
   const flujo = construirFlujo({
     tipoTransporte: inspeccion.transport_type,
     esFull: inspeccion.is_full,
+    movimiento: inspeccion.movement,
     completados: progreso.completados,
   });
 

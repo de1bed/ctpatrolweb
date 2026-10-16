@@ -35,7 +35,7 @@ export default async function EvidenciaPage({
 
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, display_id, status, transport_type, is_full, progress, data, is_collective")
+    .select("id, display_id, status, transport_type, is_full, movement, progress, data, is_collective")
     .eq("id", id)
     .maybeSingle();
 
@@ -76,6 +76,7 @@ export default async function EvidenciaPage({
   const flujo = construirFlujo({
     tipoTransporte: inspeccion.transport_type,
     esFull: inspeccion.is_full,
+    movimiento: inspeccion.movement,
     completados: leerProgreso(inspeccion.progress).completados,
   });
   const tituloDePaso = new Map(flujo.pasos.map((p) => [p.clave, p.titulo]));

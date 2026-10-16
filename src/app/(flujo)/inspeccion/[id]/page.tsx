@@ -36,7 +36,7 @@ export default async function InspeccionPage({
   // existe, y eso ya es información que no le toca.
   const { data: inspeccion } = await supabase
     .from("inspections")
-    .select("id, display_id, status, customer_name, driver_name, tractor_number, transport_type, is_full, progress, assigned_to, data")
+    .select("id, display_id, status, customer_name, driver_name, tractor_number, transport_type, is_full, movement, progress, assigned_to, data")
     .eq("id", id)
     .maybeSingle();
 
@@ -46,6 +46,7 @@ export default async function InspeccionPage({
   const flujo = construirFlujo({
     tipoTransporte: inspeccion.transport_type,
     esFull: inspeccion.is_full,
+    movimiento: inspeccion.movement,
     completados: progreso.completados,
   });
 

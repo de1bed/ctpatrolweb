@@ -244,6 +244,8 @@ export const FASES: DefinicionFase[] = [
     grupo: "cierre",
     critica: false,
     porUnidad: true,
+    // En una importación el motor los adelanta a justo después de
+    // "Estado al entrar". Aquí, al cierre, se quedan en los demás movimientos.
   },
   {
     id: "estado-salida",

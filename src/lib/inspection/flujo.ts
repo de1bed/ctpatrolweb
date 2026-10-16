@@ -18,11 +18,18 @@ import { numeroDeUnidades, type TipoTransporte } from "./transporte";
  * Por eso se puede probar de verdad — ver `flujo.test.ts`.
  */
 
+export type Movimiento = "importacion" | "exportacion" | "local" | "otro";
+
 export type EstadoFlujo = {
   tipoTransporte: TipoTransporte | null;
   esFull: boolean;
   /** Claves de paso ya terminadas. Ver `clavePaso`. */
   completados: string[];
+  /**
+   * Si es importación, los sellos se adelantan a justo después del estado
+   * al entrar. Sin dato, o con cualquier otro movimiento, se quedan al cierre.
+   */
+  movimiento?: Movimiento | null;
 };
 
 /**
@@ -63,8 +70,9 @@ export type Flujo = {
   puedePausar: boolean;
   /**
    * Pasos previos al cierre que faltan. Mientras no esté vacío, el cierre
-   * (sellos, revisión, firmas…) sigue bloqueado: no se cierra una unidad con
-   * puntos de inspección sin capturar.
+   * (temperaturas, revisión, firmas…) sigue bloqueado: no se cierra una unidad
+   * con puntos de inspección sin capturar. En una importación los sellos no
+   * cuentan aquí: van antes, con los datos de la unidad.
    */
   pendientesAntesDeCierre: Paso[];
 };
@@ -90,6 +98,29 @@ export function clavePaso(faseId: FaseId, unidad: number | null): string {
 /** Extrae el id de fase de una clave de paso. */
 export function faseIdDeClave(clave: string): FaseId {
   return clave.split(SEPARADOR_UNIDAD)[0] as FaseId;
+}
+
+/**
+ * En una importación los sellos se verifican al llegar, no al cerrar.
+ * Quedan justo después del estado al entrar y salen del grupo de cierre,
+ * para poder capturarlos en ese momento. El cierre sigue bloqueado hasta
+ * que estos sellos, y todo lo demás, estén listos.
+ *
+ * Sin estado al entrar o sin sellos, el orden no cambia.
+ */
+function adelantarSellos(pasos: Paso[]): Paso[] {
+  if (!pasos.some((p) => p.fase.id === "estado-entrada")) return pasos;
+
+  const sellos = pasos.filter((p) => p.fase.id === "sellos");
+  if (sellos.length === 0) return pasos;
+
+  const adelantados = sellos.map((p) => ({
+    ...p,
+    fase: { ...p.fase, grupo: "unidad" as const },
+  }));
+  const resto = pasos.filter((p) => p.fase.id !== "sellos");
+  const corte = resto.findIndex((p) => p.fase.id === "estado-entrada") + 1;
+  return [...resto.slice(0, corte), ...adelantados, ...resto.slice(corte)];
 }
 
 function tituloPaso(fase: DefinicionFase, unidad: number | null, totalUnidades: number) {
@@ -156,20 +187,23 @@ export function construirFlujo(estado: EstadoFlujo): Flujo {
     });
   }
 
-  const hechos = pasos.filter((p) => p.completado).length;
-  const criticosPendientes = pasos.filter((p) => p.fase.critica && !p.completado);
+  const ordenados =
+    estado.movimiento === "importacion" ? adelantarSellos(pasos) : pasos;
+
+  const hechos = ordenados.filter((p) => p.completado).length;
+  const criticosPendientes = ordenados.filter((p) => p.fase.critica && !p.completado);
   const navegacionLibre = criticosPendientes.length === 0;
-  const pendientesAntesDeCierre = pasos.filter(
+  const pendientesAntesDeCierre = ordenados.filter(
     (p) => p.fase.grupo !== "cierre" && !p.completado
   );
 
   return {
-    pasos,
+    pasos: ordenados,
     omitidas,
     totalPasos: pasos.length,
     completados: hechos,
     porcentaje: pasos.length === 0 ? 0 : Math.round((hechos / pasos.length) * 100),
-    siguiente: pasos.find((p) => !p.completado) ?? null,
+    siguiente: ordenados.find((p) => !p.completado) ?? null,
     criticosPendientes,
     navegacionLibre,
     // Pausar exige los críticos listos. Si no, al retomar la inspección no

@@ -283,6 +283,82 @@ describe("puedeAbrir", () => {
   });
 });
 
+describe("construirFlujo · sellos en importación", () => {
+  it("en una importación los sellos van justo después del estado al entrar", () => {
+    const c = claves(
+      base({ tipoTransporte: "contenedor", movimiento: "importacion" })
+    );
+    const entrada = c.indexOf("estado-entrada");
+    assert.equal(c[entrada + 1], "sellos~1");
+    assert.ok(c.indexOf("documentos") > c.indexOf("sellos~1"));
+    assert.ok(c.indexOf("firmas") > c.indexOf("sellos~1"));
+  });
+
+  it("en un full de importación adelanta las dos cajas, en orden", () => {
+    const c = claves(
+      base({ tipoTransporte: "contenedor", esFull: true, movimiento: "importacion" })
+    );
+    const entrada = c.indexOf("estado-entrada");
+    assert.deepEqual(c.slice(entrada + 1, entrada + 3), ["sellos~1", "sellos~2"]);
+  });
+
+  it("ahí ya se pueden abrir, sin esperar al resto de la inspección", () => {
+    const inicial = construirFlujo(
+      base({ tipoTransporte: "contenedor", movimiento: "importacion" })
+    );
+    const clavesIniciales = inicial.pasos.map((p) => p.clave);
+    const hastaEntrada = clavesIniciales.slice(
+      0,
+      clavesIniciales.indexOf("estado-entrada") + 1
+    );
+    const flujo = construirFlujo(
+      base({
+        tipoTransporte: "contenedor",
+        movimiento: "importacion",
+        completados: hastaEntrada,
+      })
+    );
+    assert.equal(flujo.siguiente?.clave, "sellos~1");
+    assert.equal(puedeAbrir(flujo, "sellos~1"), true);
+    assert.equal(puedeAbrir(flujo, "firmas"), false);
+    assert.equal(puedeAbrir(flujo, "comentarios"), false);
+  });
+
+  it("el cierre de una importación no se abre si faltan los sellos", () => {
+    const inicial = construirFlujo(
+      base({ tipoTransporte: "contenedor", movimiento: "importacion" })
+    );
+    const previos = inicial.pasos
+      .filter((p) => p.fase.grupo !== "cierre" && p.fase.id !== "sellos")
+      .map((p) => p.clave);
+    const flujo = construirFlujo(
+      base({
+        tipoTransporte: "contenedor",
+        movimiento: "importacion",
+        completados: previos,
+      })
+    );
+    assert.equal(puedeAbrir(flujo, "sellos~1"), true);
+    assert.equal(puedeAbrir(flujo, "comentarios"), false);
+    assert.equal(puedeAbrir(flujo, "firmas"), false);
+  });
+
+  it("sin importación los sellos se quedan al cierre", () => {
+    for (const movimiento of [undefined, null, "exportacion", "local", "otro"] as const) {
+      const c = claves(base({ tipoTransporte: "contenedor", movimiento }));
+      const sellos = c.indexOf("sellos~1");
+      assert.ok(sellos > c.indexOf("documentos"), String(movimiento));
+      assert.ok(sellos > c.indexOf("inspeccion-externa~1"), String(movimiento));
+      assert.equal(c[sellos + 1], "estado-salida", String(movimiento));
+    }
+  });
+
+  it("una pipa de importación sigue sin sellos", () => {
+    const c = claves(base({ tipoTransporte: "pipa", movimiento: "importacion" }));
+    assert.ok(!c.some((k) => k.startsWith("sellos")));
+  });
+});
+
 describe("integridad del catálogo", () => {
   it("no hay ids de fase repetidos", () => {
     const ids = FASES.map((f) => f.id);
