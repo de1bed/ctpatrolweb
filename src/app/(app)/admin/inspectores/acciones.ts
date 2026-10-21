@@ -112,12 +112,45 @@ const esquemaAlta = z.object({
 });
 
 /**
+ * Detecta si un error de Supabase Auth indica que el correo ya existe.
+ *
+ * Supabase puede devolver distintos mensajes según la versión y el contexto:
+ * - "User already registered"
+ * - "A user with this email address has already been registered"
+ * - "email_exists" (código de error)
+ * - "Ya existe un usuario con ese correo" (nuestro RPC)
+ */
+function esErrorCorreoExistente(error: { message?: string; code?: string }): boolean {
+  const msg = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+
+  return (
+    msg.includes("already registered") ||
+    msg.includes("already exists") ||
+    msg.includes("ya existe") ||
+    msg.includes("email_exists") ||
+    msg.includes("duplicate") ||
+    msg.includes("unique constraint") ||
+    code === "email_exists" ||
+    code === "user_already_exists" ||
+    code === "23505" // PostgreSQL unique violation
+  );
+}
+
+/**
  * Alta de usuario.
  *
  * Prefiere service role si está configurado. Si no, usa `admin_crear_usuario`,
  * un RPC que solo puede ejecutar un admin de la cuenta.
  *
  * El perfil NO se inserta aquí: lo crea el trigger `handle_new_user`.
+ *
+ * NOTA: El modelo de datos solo permite UN usuario por empresa. No hay forma
+ * de invitar a un usuario existente a otra empresa; para eso habría que añadir
+ * una tabla de membresías (user_company_memberships) y cambiar la lógica de
+ * sesión. Si el correo ya existe en Auth (de otra empresa, del /registro
+ * antiguo, etc.), la única opción es contactar soporte para migrar la cuenta
+ * o usar otro correo.
  */
 export async function crearUsuario(entrada: unknown): Promise<Resultado> {
   const sesion = await requerirAdmin();
@@ -137,6 +170,11 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
 
   let userId: string | null = null;
 
+  const errorCorreoExistente =
+    "Ese correo ya está registrado en otra cuenta. " +
+    "Cada usuario solo puede pertenecer a una empresa. " +
+    "Usa otro correo o contacta soporte para revisar la cuenta existente.";
+
   if (admin) {
     const { data, error } = await admin.auth.admin.createUser({
       email,
@@ -150,11 +188,11 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
     });
 
     if (error) {
-      if (error.message.includes("already registered")) {
-        return { ok: false, error: "Ya existe un usuario con ese correo." };
+      if (esErrorCorreoExistente(error)) {
+        return { ok: false, error: errorCorreoExistente };
       }
       console.error("No se pudo crear el usuario", error);
-      return { ok: false, error: "No se pudo crear el usuario." };
+      return { ok: false, error: "No se pudo crear el usuario. Intenta de nuevo o contacta soporte." };
     }
     userId = data.user?.id ?? null;
   } else {
@@ -169,11 +207,11 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
     });
 
     if (error) {
-      if (error.message.includes("Ya existe")) {
-        return { ok: false, error: "Ya existe un usuario con ese correo." };
+      if (esErrorCorreoExistente(error)) {
+        return { ok: false, error: errorCorreoExistente };
       }
       console.error("No se pudo crear el usuario", error);
-      return { ok: false, error: error.message || "No se pudo crear el usuario." };
+      return { ok: false, error: "No se pudo crear el usuario. Intenta de nuevo o contacta soporte." };
     }
   }
 
