@@ -105,10 +105,6 @@ const esquemaAlta = z.object({
   email: z.string().trim().email("Correo inválido"),
   nombre: z.string().trim().min(1, "Falta el nombre").max(200),
   rol: z.enum(["inspector", "admin"]),
-  password: z
-    .string()
-    .min(10, "La contraseña debe tener al menos 10 caracteres")
-    .max(72, "Máximo 72 caracteres"),
 });
 
 /**
@@ -138,10 +134,11 @@ function esErrorCorreoExistente(error: { message?: string; code?: string }): boo
 }
 
 /**
- * Alta de usuario.
+ * Alta de usuario con invitación segura.
  *
- * Prefiere service role si está configurado. Si no, usa `admin_crear_usuario`,
- * un RPC que solo puede ejecutar un admin de la cuenta.
+ * Crea el usuario en Supabase Auth y envía un enlace seguro de un solo uso
+ * (caduca en 7 días) para que el invitado elija su propia contraseña.
+ * No se muestra ni se envía ninguna contraseña temporal.
  *
  * El perfil NO se inserta aquí: lo crea el trigger `handle_new_user`.
  *
@@ -159,7 +156,7 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
   if (!validado.success) {
     return { ok: false, error: validado.error.issues[0].message };
   }
-  const { email, nombre, rol, password } = validado.data;
+  const { email, nombre, rol } = validado.data;
 
   let admin;
   try {
@@ -168,65 +165,59 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
     admin = null;
   }
 
-  let userId: string | null = null;
+  if (!admin) {
+    return {
+      ok: false,
+      error: "No se puede crear usuarios sin la llave de servicio configurada.",
+    };
+  }
 
   const errorCorreoExistente =
     "Ese correo ya está registrado en otra cuenta. " +
     "Cada usuario solo puede pertenecer a una empresa. " +
     "Usa otro correo o contacta soporte para revisar la cuenta existente.";
 
-  if (admin) {
-    const { data, error } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
+  const origen = clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+
+  const { data: inviteData, error: inviteError } = await admin.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: {
+      redirectTo: `${origen}/auth/callback?next=/invitacion/activar`,
+      data: {
         company_account_id: sesion.companyAccountId,
         role: rol,
         full_name: nombre,
       },
-    });
+    },
+  });
 
-    if (error) {
-      if (esErrorCorreoExistente(error)) {
-        return { ok: false, error: errorCorreoExistente };
-      }
-      console.error("No se pudo crear el usuario", error);
-      return { ok: false, error: "No se pudo crear el usuario. Intenta de nuevo o contacta soporte." };
+  if (inviteError) {
+    if (esErrorCorreoExistente(inviteError)) {
+      return { ok: false, error: errorCorreoExistente };
     }
-    userId = data.user?.id ?? null;
-  } else {
-    // Sin service role: el RPC SECURITY DEFINER crea el usuario en Auth
-    // con la cuenta del admin que está pidiendo el alta.
-    const supabase = await createClient();
-    const { error } = await supabase.rpc("admin_crear_usuario", {
-      p_email: email,
-      p_password: password,
-      p_full_name: nombre,
-      p_role: rol,
-    });
-
-    if (error) {
-      if (esErrorCorreoExistente(error)) {
-        return { ok: false, error: errorCorreoExistente };
-      }
-      console.error("No se pudo crear el usuario", error);
-      return { ok: false, error: "No se pudo crear el usuario. Intenta de nuevo o contacta soporte." };
-    }
+    console.error("No se pudo generar el enlace de invitación", inviteError);
+    return { ok: false, error: "No se pudo crear el usuario. Intenta de nuevo o contacta soporte." };
   }
 
-  revalidatePath("/admin/inspectores");
+  const userId = inviteData.user?.id ?? null;
+  const hashedToken = inviteData.properties?.hashed_token;
 
-  const urlEntrar = `${clientEnv.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/login`;
+  if (!hashedToken) {
+    console.error("No se recibió el token de invitación");
+    return { ok: false, error: "No se pudo generar el enlace de invitación." };
+  }
+
+  const urlInvitacion = `${origen}/auth/callback?token_hash=${encodeURIComponent(hashedToken)}&type=invite&next=/invitacion/activar`;
+
+  revalidatePath("/admin/inspectores");
 
   const correo = await enviarAltaUsuario({
     to: email,
     nombre,
     empresa: sesion.cuenta.name,
     rol: rol === "admin" ? "administrador" : "inspector",
-    email,
-    password,
-    urlEntrar,
+    urlInvitacion,
     invitador: sesion.nombre,
   });
 
@@ -234,29 +225,21 @@ export async function crearUsuario(entrada: unknown): Promise<Resultado> {
     console.error("No se pudo enviar la invitación", correo.error);
   }
 
-  if (admin) {
-    if (!userId) {
-      const { data } = await admin.auth.admin.listUsers({ perPage: 200 });
-      userId =
-        data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
-          ?.id ?? null;
-    }
-    if (userId) {
-      await admin.auth.admin.updateUserById(userId, {
-        user_metadata: {
-          company_account_id: sesion.companyAccountId,
-          role: rol,
-          full_name: nombre,
-          invite_email_sent: correo.ok,
-        },
-      });
-    }
+  if (userId) {
+    await admin.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        company_account_id: sesion.companyAccountId,
+        role: rol,
+        full_name: nombre,
+        invite_email_sent: correo.ok,
+      },
+    });
   }
 
   return {
     ok: true,
     correoEnviado: correo.ok,
     errorCorreo: correo.ok ? undefined : correo.error,
-    urlEntrar,
+    urlEntrar: urlInvitacion,
   };
 }

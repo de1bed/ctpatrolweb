@@ -23,6 +23,15 @@ const nextConfig: NextConfig = {
     // así es como se llega a producción con media app rota.
     ignoreBuildErrors: false,
   },
+
+  /**
+   * Desactiva la normalización de URLs en el proxy para que las visitas
+   * directas y las transiciones de cliente se manejen igual.
+   *
+   * Sin esto, /ajustes puede comportarse diferente cuando se abre
+   * directamente en el navegador vs cuando se navega desde el menú.
+   */
+  skipProxyUrlNormalize: true,
 };
 
 export default nextConfig;

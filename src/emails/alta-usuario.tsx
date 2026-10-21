@@ -1,22 +1,18 @@
-import { Text } from "react-email";
+import { Link, Text } from "react-email";
 
-import { Boton, Dato, MarcoCorreo, Parrafo, Titulo } from "./marco";
+import { Boton, MarcoCorreo, Parrafo, Titulo } from "./marco";
 
 export function CorreoAltaUsuario({
   nombre,
   empresa,
   rol,
-  email,
-  password,
-  urlEntrar,
+  urlInvitacion,
   invitador,
 }: {
   nombre: string;
   empresa: string;
   rol: string;
-  email: string;
-  password: string;
-  urlEntrar: string;
+  urlInvitacion: string;
   invitador: string;
 }) {
   return (
@@ -25,16 +21,16 @@ export function CorreoAltaUsuario({
       <Parrafo>Hola {nombre},</Parrafo>
       <Parrafo>
         <strong>{invitador}</strong> te dio de alta en el equipo de{" "}
-        <strong>{empresa}</strong> como {rol}. Entra a tu cuenta en este
-        enlace, con estos accesos.
+        <strong>{empresa}</strong> como {rol}. Entra con el botón de abajo para
+        elegir tu contraseña y activar tu cuenta.
       </Parrafo>
-      <Dato etiqueta="Enlace" valor={urlEntrar} />
-      <Dato etiqueta="Correo" valor={email} />
-      <Dato etiqueta="Contraseña temporal" valor={password} />
-      <Boton href={urlEntrar}>Entrar a CTPatrol</Boton>
+      <Boton href={urlInvitacion}>Activar mi cuenta</Boton>
       <Text style={{ color: "#475569", fontSize: "13px", lineHeight: "20px", margin: 0 }}>
-        Si este correo no te aparece en la bandeja, entra igual con el enlace
-        y los accesos de arriba. Cambia la contraseña en Ajustes al entrar.
+        Este enlace es de un solo uso y caduca en 7 días. Si el botón no abre,
+        copia este enlace:{" "}
+        <Link href={urlInvitacion} style={{ color: "#0c77bd" }}>
+          {urlInvitacion}
+        </Link>
       </Text>
     </MarcoCorreo>
   );
@@ -44,8 +40,6 @@ CorreoAltaUsuario.PreviewProps = {
   nombre: "Juan Pérez",
   empresa: "Transportes Demo",
   rol: "inspector",
-  email: "inspector@demo.mx",
-  password: "TemporalDemo12",
-  urlEntrar: "http://localhost:3100/login",
+  urlInvitacion: "http://localhost:3100/auth/callback?token_hash=demo&type=invite&next=/invitacion/activar",
   invitador: "María López",
 };
