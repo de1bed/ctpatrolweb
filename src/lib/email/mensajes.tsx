@@ -13,9 +13,7 @@ export function enviarAltaUsuario(opts: {
   nombre: string;
   empresa: string;
   rol: string;
-  email: string;
-  password: string;
-  urlEntrar: string;
+  urlInvitacion: string;
   invitador: string;
 }): Promise<ResultadoCorreo> {
   return enviarCorreo({
@@ -26,13 +24,11 @@ export function enviarAltaUsuario(opts: {
         nombre={opts.nombre}
         empresa={opts.empresa}
         rol={opts.rol}
-        email={opts.email}
-        password={opts.password}
-        urlEntrar={opts.urlEntrar}
+        urlInvitacion={opts.urlInvitacion}
         invitador={opts.invitador}
       />
     ),
-    idempotencyKey: `alta-usuario/${opts.email}/${Date.now()}`.slice(0, 256),
+    idempotencyKey: `alta-usuario/${opts.to}/${Date.now()}`.slice(0, 256),
   });
 }
 

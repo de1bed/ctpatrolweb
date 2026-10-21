@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Check, Copy, RefreshCw, UserPlus, X } from "lucide-react";
+import { AlertCircle, Check, Copy, UserPlus, X } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -9,34 +9,19 @@ import { OptionCards } from "@/components/ui/option-cards";
 
 import { crearUsuario } from "./acciones";
 
-/**
- * Genera una contraseña inicial legible pero fuerte.
- *
- * Se usa alfabeto sin caracteres ambiguos (0/O, 1/l/I): esta contraseña se
- * dicta por teléfono o se escribe en un papel, y una confusión ahí es una
- * llamada a soporte.
- */
-function generarPassword(): string {
-  const alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  const bytes = crypto.getRandomValues(new Uint8Array(14));
-  return Array.from(bytes, (b) => alfabeto[b % alfabeto.length]).join("");
-}
-
 export function AltaUsuario() {
   const [abierto, setAbierto] = useState(false);
   const [pendiente, empezar] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [creado, setCreado] = useState<{
     email: string;
-    password: string;
-    urlEntrar: string;
+    urlInvitacion: string;
     correoEnviado: boolean;
     errorCorreo?: string;
   } | null>(null);
   const [email, setEmail] = useState("");
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState<string>("inspector");
-  const [password, setPassword] = useState(generarPassword);
   const [copiado, setCopiado] = useState(false);
 
   function cerrar() {
@@ -46,19 +31,15 @@ export function AltaUsuario() {
     setEmail("");
     setNombre("");
     setRol("inspector");
-    setPassword(generarPassword());
     setCopiado(false);
   }
 
-  const mensajeAcceso = creado
+  const mensajeInvitacion = creado
     ? [
-        "Entra a tu cuenta de CTPatrol en este enlace:",
-        creado.urlEntrar,
+        "Te invitamos a CTPatrol. Activa tu cuenta con este enlace:",
+        creado.urlInvitacion,
         "",
-        `Correo: ${creado.email}`,
-        `Contraseña: ${creado.password}`,
-        "",
-        "Si no te llegó el correo de invitación, entra con estos datos.",
+        "El enlace caduca en 7 días.",
       ].join("\n")
     : "";
 
@@ -88,7 +69,7 @@ export function AltaUsuario() {
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 className="text-xl font-bold text-ink">
-            {creado ? "Usuario creado" : "Nuevo usuario"}
+            {creado ? "Invitación enviada" : "Nuevo usuario"}
           </h2>
           <button
             type="button"
@@ -101,29 +82,17 @@ export function AltaUsuario() {
         </div>
 
         {creado ? (
-          /* La contraseña se muestra UNA vez, aquí. No se guarda en claro en
-             ningún lado, así que si el admin cierra sin copiarla, el camino
-             es restablecerla, no recuperarla. */
           <div className="flex flex-col gap-4">
             <div className="flex items-start gap-2.5 rounded-xl border border-ok-500/40 bg-ok-50 px-4 py-3 text-sm text-ok-700 dark:bg-ok-500/10 dark:text-ok-500">
               <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
                 {creado.correoEnviado
-                  ? "Le enviamos la invitación. Si no le llega, pásale este mensaje con el enlace y los accesos."
-                  : `La cuenta quedó lista, pero el correo no salió${creado.errorCorreo ? ` (${creado.errorCorreo})` : ""}. Pásale este mensaje con el enlace y los accesos.`}
+                  ? "Le enviamos la invitación por correo. Cuando entre al enlace, elegirá su propia contraseña."
+                  : `La cuenta quedó lista, pero el correo no salió${creado.errorCorreo ? ` (${creado.errorCorreo})` : ""}. Pásale el enlace de abajo.`}
               </span>
             </div>
 
             <div className="rounded-xl border border-line bg-surface-sunken p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                Enlace
-              </p>
-              <a
-                href={creado.urlEntrar}
-                className="mb-3 block break-all font-mono text-sm text-brand-700"
-              >
-                {creado.urlEntrar}
-              </a>
               <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
                 Correo
               </p>
@@ -131,10 +100,10 @@ export function AltaUsuario() {
                 {creado.email}
               </p>
               <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                Contraseña temporal
+                Enlace de activación
               </p>
-              <p className="select-all break-all font-mono text-lg font-bold text-ink" data-selectable>
-                {creado.password}
+              <p className="select-all break-all font-mono text-sm text-brand-700" data-selectable>
+                {creado.urlInvitacion}
               </p>
             </div>
 
@@ -142,7 +111,7 @@ export function AltaUsuario() {
               variant="secondary"
               block
               onClick={() => {
-                void navigator.clipboard.writeText(mensajeAcceso).then(() => {
+                void navigator.clipboard.writeText(mensajeInvitacion).then(() => {
                   setCopiado(true);
                 });
               }}
@@ -152,7 +121,7 @@ export function AltaUsuario() {
             </Button>
 
             <p className="text-sm text-ink-muted">
-              Esta contraseña no se vuelve a mostrar. Cópiala antes de cerrar.
+              El enlace es de un solo uso y caduca en 7 días.
             </p>
 
             <Button block onClick={cerrar}>
@@ -217,29 +186,10 @@ export function AltaUsuario() {
               onChange={setRol}
             />
 
-            <Field
-              label="Contraseña temporal"
-              hint="Generada al azar. Se muestra una sola vez."
-            >
-              {(p) => (
-                <div className="flex gap-2">
-                  <Input
-                    {...p}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="font-mono"
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={() => setPassword(generarPassword())}
-                    aria-label="Generar otra contraseña"
-                    className="shrink-0"
-                  >
-                    <RefreshCw className="size-5" aria-hidden />
-                  </Button>
-                </div>
-              )}
-            </Field>
+            <p className="text-sm text-ink-secondary">
+              Le enviaremos un enlace de activación por correo. Cuando entre,
+              elegirá su propia contraseña.
+            </p>
 
             <Button
               block
@@ -252,18 +202,17 @@ export function AltaUsuario() {
                     email: email.trim(),
                     nombre: nombre.trim(),
                     rol,
-                    password,
                   });
                   if (r.ok) {
                     setCreado({
                       email: email.trim(),
-                      password,
-                      urlEntrar: r.urlEntrar ?? "/login",
+                      urlInvitacion: r.urlEntrar ?? "/login",
                       correoEnviado: Boolean(r.correoEnviado),
                       errorCorreo: r.errorCorreo,
                     });
+                  } else {
+                    setError(r.error);
                   }
-                  else setError(r.error);
                 })
               }
             >
