@@ -10,17 +10,7 @@ export default function RegistroPage() {
     <MarcoAuth
       titulo="Acceso por invitación"
       subtitulo="El registro público no está disponible. El acceso a CTPatrol es solo por invitación de tu empresa."
-      pie={
-        <>
-          ¿Ya tienes cuenta?{" "}
-          <Link
-            href="/login"
-            className="font-medium text-brand-600 hover:text-brand-700"
-          >
-            Entrar
-          </Link>
-        </>
-      }
+      pie={<PieRegistro />}
     >
       <div className="rounded-xl border border-line bg-surface-secondary p-5 text-center">
         <p className="text-sm text-ink-secondary">
@@ -39,5 +29,32 @@ export default function RegistroPage() {
         </p>
       </div>
     </MarcoAuth>
+  );
+}
+
+function PieRegistro() {
+  return (
+    <div className="space-y-3">
+      <p>
+        ¿Ya tienes cuenta?{" "}
+        <Link
+          href="/login"
+          className="font-medium text-brand-600 hover:text-brand-700"
+        >
+          Entrar
+        </Link>
+      </p>
+      <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-ink-muted">
+        <Link href="/privacidad" className="hover:text-brand-600">
+          Aviso de privacidad
+        </Link>
+        <Link href="/terminos" className="hover:text-brand-600">
+          Términos
+        </Link>
+        <Link href="/cookies" className="hover:text-brand-600">
+          Cookies
+        </Link>
+      </nav>
+    </div>
   );
 }

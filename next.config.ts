@@ -32,6 +32,58 @@ const nextConfig: NextConfig = {
    * directamente en el navegador vs cuando se navega desde el menú.
    */
   skipProxyUrlNormalize: true,
+
+  /**
+   * Cabeceras de seguridad para todas las rutas.
+   *
+   * Vercel ya manda HSTS. Aquí añadimos las que faltan:
+   *
+   *   Content-Security-Policy   Controla de dónde pueden venir scripts,
+   *                             estilos, imágenes, conexiones, etc.
+   *   X-Frame-Options           Evita que la app se cargue en un iframe
+   *                             ajeno (clickjacking). DENY es lo más seguro.
+   *   X-Content-Type-Options    Impide que el navegador adivine el MIME type
+   *                             y ejecute algo que no era ejecutable.
+   *   Referrer-Policy           Limita cuánta información del referer se
+   *                             manda a otros sitios.
+   *   Permissions-Policy        Declara qué APIs del dispositivo se usan.
+   *                             Cámara y geolocalización son las relevantes.
+   *
+   * La CSP es permisiva ('unsafe-inline', 'unsafe-eval') porque Next.js
+   * inyecta scripts inline y Tailwind genera estilos inline. Se puede
+   * endurecer con nonce, pero eso requiere un middleware que genere el
+   * nonce y lo inyecte en cada respuesta.
+   */
+  async headers() {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https://*.supabase.co",
+      "media-src 'self' blob:",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      "worker-src 'self' blob:",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; ");
+
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-Frame-Options", value: "DENY" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(self), microphone=(), geolocation=(self)",
+          },
+          { key: "Content-Security-Policy", value: csp },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
