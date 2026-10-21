@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { Alerta } from "@/components/auth/alerta";
 import { MarcoAuth } from "@/components/auth/marco";
@@ -24,17 +23,6 @@ export default async function LoginPage({
     <MarcoAuth
       titulo="Entrar"
       subtitulo="Inspecciones de seguridad C-TPAT"
-      pie={
-        <>
-          ¿Primera vez?{" "}
-          <Link
-            href="/registro"
-            className="font-medium text-brand-600 hover:text-brand-700"
-          >
-            Crea la cuenta de tu empresa
-          </Link>
-        </>
-      }
     >
       {error && (
         <div className="mb-5">
