@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Plus, ScanLine, Thermometer, Trash2, TriangleAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { CamaraPantallaCompleta } from "@/components/inspection/camera";
 import { PantallaFase } from "@/components/inspection/phase-shell";
@@ -24,14 +24,15 @@ import { previo, type PropsFase } from "./tipos";
 type OtroDoc = { titulo: string; numero: string };
 
 function MiniaturaDocumento({ foto }: { foto: FotoLocal }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const url = useMemo(() => {
+    if (!foto.blob || foto.blob.size === 0) return null;
+    return URL.createObjectURL(foto.blob);
+  }, [foto]);
 
   useEffect(() => {
-    if (!foto.blob || foto.blob.size === 0) return;
-    const creada = URL.createObjectURL(foto.blob);
-    setUrl(creada);
-    return () => URL.revokeObjectURL(creada);
-  }, [foto]);
+    if (!url) return;
+    return () => URL.revokeObjectURL(url);
+  }, [url]);
 
   return (
     <figure className="w-24 shrink-0">
