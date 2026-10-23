@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle, X } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { crearAsignada } from "@/app/(app)/admin/inspecciones/acciones";
 import {
@@ -40,30 +40,39 @@ export function FormularioProgramar({
   fechaInicial?: string;
   inspectorInicial?: string;
 }) {
+  if (!abierto) return null;
+
+  return (
+    <FormularioProgramarAbierto
+      inspectores={inspectores}
+      onCerrar={onCerrar}
+      fechaInicial={fechaInicial}
+      inspectorInicial={inspectorInicial}
+    />
+  );
+}
+
+function FormularioProgramarAbierto({
+  inspectores,
+  onCerrar,
+  fechaInicial,
+  inspectorInicial,
+}: {
+  inspectores: { id: string; nombre: string }[];
+  onCerrar: () => void;
+  fechaInicial?: string;
+  inspectorInicial?: string;
+}) {
   const [pendiente, empezar] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [inspectorId, setInspectorId] = useState("");
-  const [programada, setProgramada] = useState("");
+  const [inspectorId, setInspectorId] = useState(inspectorInicial ?? "");
+  const [programada, setProgramada] = useState(fechaInicial ?? "");
   const [cliente, setCliente] = useState<SeleccionCatalogo | null>(null);
   const [tractor, setTractor] = useState<SeleccionCatalogo | null>(null);
   const [conductor, setConductor] = useState<SeleccionCatalogo | null>(null);
   const [tipo, setTipo] = useState<TipoTransporte | "">("");
   const [colectiva, setColectiva] = useState(false);
-
-  useEffect(() => {
-    if (!abierto) return;
-    setError(null);
-    setColectiva(false);
-    setInspectorId(inspectorInicial ?? "");
-    setProgramada(fechaInicial ?? "");
-    setCliente(null);
-    setTractor(null);
-    setConductor(null);
-    setTipo("");
-  }, [abierto, fechaInicial, inspectorInicial]);
-
-  if (!abierto) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
