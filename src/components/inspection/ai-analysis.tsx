@@ -48,16 +48,13 @@ export function AnalisisIA({
   analisisPrevio?: Analisis | null;
 }) {
   const [pendiente, empezar] = useTransition();
-  const [id, setId] = useState<string | null>(mediaId);
+  const [idEvento, setIdEvento] = useState<string | null>(null);
+  const id = mediaId ?? idEvento;
   const [analisis, setAnalisis] = useState<Analisis | null>(
     analisisPrevio ?? null
   );
   const [error, setError] = useState<string | null>(null);
   const creditos = useCreditos();
-
-  useEffect(() => {
-    if (mediaId) setId(mediaId);
-  }, [mediaId]);
 
   useEffect(() => {
     function alSubir(e: Event) {
@@ -68,7 +65,7 @@ export function AnalisisIA({
       ) {
         return;
       }
-      setId(detalle.mediaId);
+      setIdEvento(detalle.mediaId);
     }
 
     window.addEventListener(EVENTO_EVIDENCIA_SUBIDA, alSubir);
