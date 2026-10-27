@@ -1,6 +1,7 @@
 "use client";
 
 import { HardDrive, Languages, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { cerrarSesion } from "@/app/login/actions";
@@ -172,6 +173,19 @@ export function PanelAjustes() {
           sincronice. Evita cerrar sesión con fotos pendientes.
         </p>
       </Card>
+
+      {/* ── Legal ────────────────────────────────────────────────────── */}
+      <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 pt-2 text-sm text-ink-muted">
+        <Link href="/privacidad" className="hover:text-brand-600">
+          Aviso de privacidad
+        </Link>
+        <Link href="/terminos" className="hover:text-brand-600">
+          Términos y condiciones
+        </Link>
+        <Link href="/cookies" className="hover:text-brand-600">
+          Política de cookies
+        </Link>
+      </nav>
     </>
   );
 }

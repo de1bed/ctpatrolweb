@@ -7,7 +7,16 @@ import { clientEnv } from "@/lib/env";
 import type { Database } from "./database.types";
 
 /** Rutas que se pueden ver sin sesión. Todo lo demás exige estar dentro. */
-const RUTAS_PUBLICAS = ["/login", "/registro", "/recuperar", "/auth", "/invitacion"];
+const RUTAS_PUBLICAS = [
+  "/login",
+  "/registro",
+  "/recuperar",
+  "/auth",
+  "/invitacion",
+  "/privacidad",
+  "/terminos",
+  "/cookies",
+];
 
 /** Evidencia compartida por QR: pública a propósito, la abre quien tenga el enlace. */
 const RUTAS_PUBLICAS_PREFIJO = ["/evidencia/"];
